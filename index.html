@@ -4878,7 +4878,7 @@
                     <div class="wfm-toolbar">
                         <div class="wfm-search-wrap">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                            <input type="text" class="wfm-search-input" id="workflowSearchInput" placeholder="업무명 검색..." oninput="app.filterWorkflowTree()">
+                            <input type="text" class="wfm-search-input" id="workflowSearchInput" placeholder="업무명 검색..." oninput="app.debouncedFilterWorkflowTree()">
                         </div>
                         <select class="wfm-select" id="wfmStatusFilter" onchange="app.filterWorkflowTree()">
                             <option value="all">전체 상태</option>
@@ -6060,17 +6060,36 @@
             // ===== PDF 문서 관리 (버전 2) =====
             async savePdfDocument(pdfDoc) {
                 if (!this.db) throw new Error('IndexedDB가 초기화되지 않았습니다');
-                
+
                 if (!pdfDoc.projectId) throw new Error('업무 ID가 필요합니다');
                 pdfDoc.savedAt = new Date().toISOString();
-                
+
+                // 같은 projectId+filename의 기존 레코드가 있으면 새로 추가하지 않고 덮어쓴다.
+                // (예전에는 항상 add()만 써서, 요약이 나중에 생성되거나 같은 파일을 다시 저장할 때마다
+                //  레코드가 계속 쌓여 AI 컨텍스트에 같은 문서 내용이 중복 주입되는 문제가 있었다)
+                if (!pdfDoc.id) {
+                    try {
+                        const existing = await this._findPdfDocument(pdfDoc.projectId, pdfDoc.filename);
+                        if (existing) pdfDoc.id = existing.id;
+                    } catch (e) { /* 조회 실패 시 신규 추가로 폴백 */ }
+                }
+
                 return new Promise((resolve, reject) => {
                     const transaction = this.db.transaction(['pdfDocuments'], 'readwrite');
                     const store = transaction.objectStore('pdfDocuments');
-                    const request = store.add(pdfDoc);
+                    const request = pdfDoc.id ? store.put(pdfDoc) : store.add(pdfDoc);
                     request.onsuccess = () => resolve(request.result);
                     request.onerror = () => reject(request.error);
                 });
+            }
+
+            // projectId+filename으로 기존 pdfDocuments 레코드 조회 (savePdfDocument의 중복 방지용)
+            async _findPdfDocument(projectId, filename) {
+                if (!filename) return null;
+                try {
+                    const docs = await this.getPdfDocumentsByProject(projectId);
+                    return (docs || []).find(d => d.filename === filename) || null;
+                } catch (e) { return null; }
             }
 
             async getPdfDocumentsByProject(projectId) {
@@ -6498,16 +6517,34 @@
                                     data.documentRepoMigratedAt = oldData.documentRepoMigratedAt;
                                 }
 
-                                // workflows만 제거하고 나머지는 유지
-                                delete oldData.workflows;
-                                if (Object.keys(oldData).length > 0) {
+                                // localStorage의 workflows는 IndexedDB가 나중에 손상됐을 때의 최후 폴백이므로
+                                // 지우지 말고, 방금 IndexedDB에서 읽은 최신 데이터로 갱신해 둔다.
+                                // (예전에는 여기서 workflows를 삭제해버려서, IndexedDB가 이후 손상되면
+                                //  폴백이 항상 빈 배열이 되어 업무가 전부 사라지는 문제가 있었다)
+                                try {
+                                    oldData.workflows = data.workflows;
                                     localStorage.setItem(this.STORAGE_KEY, JSON.stringify(oldData));
-                                } else {
-                                    localStorage.removeItem(this.STORAGE_KEY);
+                                } catch (quotaErr) {
+                                    // localStorage 용량 초과 시 백업 갱신은 포기 (IndexedDB가 주 저장소이므로 치명적이지 않음)
+                                    console.warn('localStorage 폴백 백업 갱신 실패(용량 초과 가능):', quotaErr);
                                 }
                             } catch (e) {
                                 // 파싱 실패 시 전체 삭제
                                 localStorage.removeItem(this.STORAGE_KEY);
+                            }
+                        } else {
+                            // 기존 백업이 없어도 최초 폴백 백업을 만들어 둔다
+                            try {
+                                localStorage.setItem(this.STORAGE_KEY, JSON.stringify({
+                                    folders: data.folders,
+                                    libraryGroups: data.libraryGroups,
+                                    libraryFileSortOrders: data.libraryFileSortOrders,
+                                    documentRepoFolders: data.documentRepoFolders,
+                                    documentRepoMigratedAt: data.documentRepoMigratedAt,
+                                    workflows: data.workflows
+                                }));
+                            } catch (quotaErr) {
+                                console.warn('localStorage 폴백 백업 생성 실패(용량 초과 가능):', quotaErr);
                             }
                         }
                     } catch (error) {
@@ -9667,7 +9704,7 @@
                         branchBtnsHtml = `<div style="padding:10px 12px;background:var(--bg-light);border-radius:8px;border:1px solid var(--border-subtle);margin-bottom:12px;">
                             <div style="font-size:0.69rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:7px;">항목 건너뛰기 실행</div>
                             <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                                ${valids.map(o => `<button onclick="app.handleBranchOption(${workflowId},${index},'${o.action}','${o.label}')" style="padding:5px 13px;font-size:0.8rem;background:transparent;color:${o.color||'var(--accent)'};border:1px solid ${o.color||'rgba(37,99,235,0.3)'};border-radius:5px;cursor:pointer;font-weight:600;font-family:inherit;transition:background 0.15s;" onmouseover="this.style.background='rgba(0,0,0,0.04)'" onmouseout="this.style.background='transparent'">${o.label}</button>`).join('')}
+                                ${valids.map(o => `<button onclick="app.handleBranchOption(${workflowId},${index},'${this.escapeJsAttr(o.action)}','${this.escapeJsAttr(o.label)}')" style="padding:5px 13px;font-size:0.8rem;background:transparent;color:${o.color||'var(--accent)'};border:1px solid ${o.color||'rgba(37,99,235,0.3)'};border-radius:5px;cursor:pointer;font-weight:600;font-family:inherit;transition:background 0.15s;" onmouseover="this.style.background='rgba(0,0,0,0.04)'" onmouseout="this.style.background='transparent'">${this.escapeHtml(o.label)}</button>`).join('')}
                             </div>
                         </div>`;
                     }
@@ -10801,13 +10838,11 @@ ${writtenSection}${docSection}
                     if (provider === 'gemini') {
                         result = await this.callGeminiWithDocuments(prompt, files);
                     } else if (provider === 'chatgpt') {
-                        // ChatGPT는 현재 이미지 지원 제한적이므로 텍스트만 전송
                         // callAIWithDocuments에서 추적하므로 skipTracking=true로 전달하여 중복 추적 방지
-                        result = await this.callChatGPT(prompt, this.allData.selectedModel.chatgpt, this.allData.chatgptApiKey, true);
+                        result = await this.callChatGPTWithDocuments(prompt, files, true);
                     } else if (provider === 'claude') {
-                        // Claude는 이미지 지원하지만 현재는 텍스트만 전송
                         // callAIWithDocuments에서 추적하므로 skipTracking=true로 전달하여 중복 추적 방지
-                        result = await this.callClaude(prompt, this.allData.selectedModel.claude, this.allData.claudeApiKey, true);
+                        result = await this.callClaudeWithDocuments(prompt, files, true);
                     }
                     
                     // API 호출 성공 추적
@@ -10863,9 +10898,12 @@ ${writtenSection}${docSection}
                         }
                         
                         if (!base64Data) continue;
-                        
-                        // PDF: inline_data로 전송 (Gemini가 구조·서식 직접 인식)
-                        parts.push({ inline_data: { mime_type: 'application/pdf', data: base64Data } });
+
+                        // inline_data로 전송 (Gemini가 구조·서식 직접 인식)
+                        // 예전엔 이미지 첨부도 무조건 application/pdf로 고정 전송되어 Gemini가
+                        // 오독/거부하는 문제가 있었다 — 실제 파일 타입을 그대로 사용한다.
+                        const mimeType = file.type || 'application/pdf';
+                        parts.push({ inline_data: { mime_type: mimeType, data: base64Data } });
                     }
 
                     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
@@ -10902,6 +10940,157 @@ ${writtenSection}${docSection}
                     if (error.message.includes('Failed to fetch')) {
                         throw new Error('네트워크 연결 오류\n\n인터넷 연결을 확인하세요.');
                     }
+                    throw error;
+                }
+            }
+
+            // 첨부파일 목록을 blob으로 로드해 이미지/텍스트문서로 분리
+            // (PDF/TXT/MD/DOCX는 텍스트 추출, 이미지는 base64로 반환)
+            async _resolveDocumentFiles(files) {
+                const textParts = [];
+                const images = [];
+                for (const file of files) {
+                    let blob = null;
+                    if (file.inIndexedDB && this.dbReady) {
+                        try {
+                            const storeName = file.storeName ||
+                                (file.projectKey ? 'projectFiles' :
+                                 file.detailKey ? 'formFiles' : 'aiFiles');
+                            const fileData = await this.dbManager.getFile(storeName, file.id);
+                            blob = fileData?.blob || null;
+                        } catch (error) {
+                            console.error('IndexedDB 파일 읽기 오류:', error);
+                        }
+                    } else if (file.data) {
+                        try { blob = await this.base64ToBlob(file.data, file.type); } catch (e) {}
+                    }
+                    if (!blob) continue;
+
+                    const isImage = (file.type || blob.type || '').startsWith('image/');
+                    if (isImage) {
+                        try {
+                            const base64Full = await this.dbManager.blobToBase64(blob);
+                            images.push({ mimeType: file.type || blob.type || 'image/png', base64: base64Full.split(',')[1] });
+                        } catch (error) {
+                            console.error('이미지 변환 오류:', error);
+                        }
+                    } else {
+                        try {
+                            const text = await this._extractTextFromBlob(blob, file.name || '');
+                            if (text) textParts.push(`[첨부 문서: ${file.name}]\n${text}`);
+                        } catch (error) {
+                            console.error('문서 텍스트 추출 오류:', error);
+                        }
+                    }
+                }
+                return { textParts, images };
+            }
+
+            // ChatGPT에 문서·이미지 첨부하여 호출
+            // 예전엔 provider가 chatgpt일 때 첨부파일이 무시되고 텍스트만 전송되던 문제를 수정:
+            // PDF/TXT/DOCX는 텍스트를 추출해 프롬프트에 포함하고, 이미지는 Vision API로 전송한다.
+            async callChatGPTWithDocuments(prompt, files, skipTracking = false) {
+                const model = this.allData.selectedModel.chatgpt;
+                const apiKey = this.allData.chatgptApiKey;
+                const timeout = 45000;
+
+                try {
+                    const { textParts, images } = await this._resolveDocumentFiles(files);
+                    const fullPrompt = textParts.length > 0 ? `${textParts.join('\n\n')}\n\n[질문]\n${prompt}` : prompt;
+
+                    const content = images.length > 0
+                        ? [
+                            { type: 'text', text: fullPrompt },
+                            ...images.map(img => ({ type: 'image_url', image_url: { url: `data:${img.mimeType};base64,${img.base64}` } }))
+                          ]
+                        : fullPrompt;
+
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), timeout);
+                    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                        body: JSON.stringify({ model, messages: [{ role: 'user', content }] }),
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+
+                    if (response.status === 429) throw new Error('요청 제한 초과 (429)\n\nOpenAI API 할당량이 초과되었습니다.\n잠시 후 다시 시도하세요.');
+                    if (response.status === 401) throw new Error('인증 오류 (401)\n\nAPI 키가 올바르지 않습니다.\nAPI 키를 확인하세요.');
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(`ChatGPT API 오류: ${response.status}\n${errorData.error?.message || ''}`);
+                    }
+
+                    const data = await response.json();
+                    if (!data.choices || !data.choices[0] || !data.choices[0].message) throw new Error('API 응답 형식 오류');
+                    const result = data.choices[0].message.content;
+
+                    if (!skipTracking) {
+                        const estimatedTokens = Math.ceil((fullPrompt.length + result.length) / 2);
+                        this.trackAPICall(true, estimatedTokens);
+                    }
+                    return result;
+                } catch (error) {
+                    if (!skipTracking) this.trackAPICall(false, 0);
+                    if (error.name === 'AbortError') throw new Error('요청 시간 초과\n\nAI 응답이 너무 오래 걸립니다. 잠시 후 다시 시도하세요.');
+                    if (error.message.includes('Failed to fetch')) throw new Error('네트워크 연결 오류\n\n인터넷 연결을 확인하세요.');
+                    throw error;
+                }
+            }
+
+            // Claude에 문서·이미지 첨부하여 호출 (ChatGPT와 동일한 이유로 추가됨)
+            async callClaudeWithDocuments(prompt, files, skipTracking = false) {
+                const model = this.allData.selectedModel.claude;
+                const apiKey = this.allData.claudeApiKey;
+                const timeout = 45000;
+
+                try {
+                    const { textParts, images } = await this._resolveDocumentFiles(files);
+                    const fullPrompt = textParts.length > 0 ? `${textParts.join('\n\n')}\n\n[질문]\n${prompt}` : prompt;
+
+                    const content = images.length > 0
+                        ? [
+                            ...images.map(img => ({ type: 'image', source: { type: 'base64', media_type: img.mimeType, data: img.base64 } })),
+                            { type: 'text', text: fullPrompt }
+                          ]
+                        : fullPrompt;
+
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), timeout);
+                    const response = await fetch('https://api.anthropic.com/v1/messages', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': apiKey,
+                            'anthropic-version': '2023-06-01',
+                            'anthropic-dangerous-direct-browser-access': 'true'
+                        },
+                        body: JSON.stringify({ model, max_tokens: 4096, messages: [{ role: 'user', content }] }),
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+
+                    if (response.status === 429) throw new Error('요청 제한 초과 (429)\n\nClaude API 할당량이 초과되었습니다.\n잠시 후 다시 시도하세요.');
+                    if (response.status === 401) throw new Error('인증 오류 (401)\n\nAPI 키가 올바르지 않습니다.\nAPI 키를 확인하세요.');
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(`Claude API 오류: ${response.status}\n${errorData.error?.message || ''}`);
+                    }
+
+                    const data = await response.json();
+                    if (!data.content || !data.content[0] || !data.content[0].text) throw new Error('API 응답 형식 오류');
+                    const result = data.content[0].text;
+
+                    if (!skipTracking) {
+                        const estimatedTokens = Math.ceil((fullPrompt.length + result.length) / 2);
+                        this.trackAPICall(true, estimatedTokens);
+                    }
+                    return result;
+                } catch (error) {
+                    if (!skipTracking) this.trackAPICall(false, 0);
+                    if (error.name === 'AbortError') throw new Error('요청 시간 초과\n\nAI 응답이 너무 오래 걸립니다. 잠시 후 다시 시도하세요.');
+                    if (error.message.includes('Failed to fetch')) throw new Error('네트워크 연결 오류\n\n인터넷 연결을 확인하세요.');
                     throw error;
                 }
             }
@@ -11708,6 +11897,11 @@ ${GOVERNMENT_DOCUMENT_GUIDELINES}
                 if (!checklist || !checklist[parentIndex]) return;
 
                 const parent = checklist[parentIndex];
+
+                // 부모 자체가 분기 처리로 건너뛰어진 상태라면 하위 항목 완료 여부와 무관하게
+                // 건드리지 않는다 (되돌리기 전까지는 completed로 덮어써지면 안 됨)
+                if (parent.skipped === true) return;
+
                 const subs = this.findSubItems(checklist, parentIndex);
                 if (!subs.length) return;
 
@@ -11823,6 +12017,7 @@ ${GOVERNMENT_DOCUMENT_GUIDELINES}
             // 영구 삭제 (휴지통에서 완전 제거)
             async permanentDeleteWorkflow(id) {
                 try {
+                    const workflow = this.allData.workflows.find(w => w.id === id);
                     this.allData.workflows = this.allData.workflows.filter(w => w.id !== id);
 
                     if (this.dbReady && this.dbManager) {
@@ -11848,6 +12043,50 @@ ${GOVERNMENT_DOCUMENT_GUIDELINES}
                         }
                         delete this.checklistDetails[projectKey];
                     }
+
+                    // 체크리스트 항목별 세부정보(서식·첨부) 정리 — "${id}-${itemId}"(신규) 및
+                    // "${id}-${index}"(구버전) 키 모두 제거. 이걸 안 하면 항목별 첨부파일이
+                    // IndexedDB에 고아 레코드로 영구 잔존한다.
+                    const itemDetailKeyPrefix = `${id}-`;
+                    const itemDetailKeys = Object.keys(this.checklistDetails).filter(k => k.startsWith(itemDetailKeyPrefix));
+                    for (const key of itemDetailKeys) {
+                        const itemDetail = this.checklistDetails[key];
+                        if (itemDetail) {
+                            if (itemDetail.forms) {
+                                for (const form of itemDetail.forms) {
+                                    if (form.inIndexedDB && form.id) {
+                                        try { await this.dbManager.deleteFile(form.storeName || 'formFiles', form.id); } catch(e) {}
+                                    }
+                                }
+                            }
+                            if (itemDetail.attachments) {
+                                for (const att of itemDetail.attachments) {
+                                    if (att.inIndexedDB && att.id) {
+                                        try { await this.dbManager.deleteFile(att.storeName || 'projectFiles', att.id); } catch(e) {}
+                                    }
+                                }
+                            }
+                        }
+                        delete this.checklistDetails[key];
+                        if (this.dbReady && this.dbManager) {
+                            try { await this.dbManager.deleteChecklistDetails(key); } catch(e) {}
+                        }
+                    }
+
+                    // checklistDetails 캐시에 없더라도 workflow.checklist[i].formats에 직접 연결된
+                    // 서식 파일이 남아있을 수 있으므로 함께 정리 (서식·문서함 공유문서인 linkedDocs는 제외)
+                    if (workflow && workflow.checklist) {
+                        for (const item of workflow.checklist) {
+                            if (item.formats) {
+                                for (const form of item.formats) {
+                                    if (form.inIndexedDB && form.id) {
+                                        try { await this.dbManager.deleteFile(form.storeName || 'formFiles', form.id); } catch(e) {}
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // 메모리 캐시 유무와 무관하게 IndexedDB 레코드 정리
                     if (this.dbReady && this.dbManager) {
                         try { await this.dbManager.deleteChecklistDetails(projectKey); } catch(e) {}
@@ -12017,13 +12256,19 @@ ${GOVERNMENT_DOCUMENT_GUIDELINES}
                 if (!workflow) return;
                 workflow.isDeleted = false;
                 workflow.deletedAt = null;
-                workflow.folderPath = '';  // 미분류로 복구
+                // 삭제 당시 폴더가 그대로 남아있으면 유지, 폴더 자체가 사라진 경우에만 미분류로 복구
+                const hadFolder = workflow.folderPath && workflow.folderPath.trim() !== '';
+                const folderStillExists = hadFolder && this._folderPathExists(workflow.folderPath);
+                if (hadFolder && !folderStillExists) workflow.folderPath = '';
                 this.saveData();
                 this.updateStats();
                 this.displayWorkflows();
                 this.updateTrashBadge();
                 this.renderTrashList();
-                this.showToast('success', '♻️', `"${workflow.title}"이(가) 복구되었습니다. 미분류 업무에서 확인하세요.`);
+                const msg = folderStillExists
+                    ? `"${workflow.title}"이(가) "${workflow.folderPath}" 폴더로 복구되었습니다.`
+                    : `"${workflow.title}"이(가) 복구되었습니다. 미분류 업무에서 확인하세요.`;
+                this.showToast('success', '♻️', msg);
             }
 
             // 선택 항목 일괄 복구
@@ -12032,7 +12277,12 @@ ${GOVERNMENT_DOCUMENT_GUIDELINES}
                 const ids = [...this._trashSelected];
                 ids.forEach(id => {
                     const w = this.allData.workflows.find(w => w.id === id);
-                    if (w) { w.isDeleted = false; w.deletedAt = null; w.folderPath = ''; }
+                    if (!w) return;
+                    w.isDeleted = false;
+                    w.deletedAt = null;
+                    // 삭제 당시 폴더가 그대로 남아있으면 유지, 폴더 자체가 사라진 경우에만 미분류로 복구
+                    const hadFolder = w.folderPath && w.folderPath.trim() !== '';
+                    if (hadFolder && !this._folderPathExists(w.folderPath)) w.folderPath = '';
                 });
                 this._trashSelected.clear();
                 this.saveData();
@@ -12095,6 +12345,10 @@ ${GOVERNMENT_DOCUMENT_GUIDELINES}
                 const workflow = this.allData.workflows.find(w => w.id === id);
                 if (!workflow) return;
                 workflow.isArchived = true;
+                // 보관함과 처리완료는 동시에 표시되면 안 되는 상호배타적 상태이므로,
+                // 보관 처리 시 완료 플래그를 해제한다 (완료 목록에 중복 표시되는 것 방지)
+                delete workflow.completedProcessed;
+                delete workflow.completedAt;
                 this.hasUnsavedChanges = true;
                 this.saveData();
                 this.showToast('success', '📦', '보관함으로 이동되었습니다. 업무 관리에서 복원할 수 있습니다.');
@@ -12160,12 +12414,18 @@ ${GOVERNMENT_DOCUMENT_GUIDELINES}
                 if (!confirm(`"${workflow.title}"\n\n완료 처리하시겠습니까?\n\n완료된 업무 섹션으로 이동됩니다.\n재활용 또는 삭제할 수 있습니다.`)) return;
                 workflow.completedProcessed = true;
                 workflow.completedAt = new Date().toISOString();
+                // 보관함과 처리완료는 동시에 표시되면 안 되는 상호배타적 상태이므로,
+                // 완료 처리 시 보관 플래그를 해제한다 (보관함 목록에 중복 표시되는 것 방지)
+                delete workflow.isArchived;
                 this.saveData();
                 if (this.focusMode && this.focusedWorkflowId === id) {
                     this.exitFocusMode();
                 } else {
                     this.updateStats();
                     this.displayWorkflows();
+                }
+                if (document.getElementById('workflowManagerModal')?.classList.contains('show')) {
+                    this.renderWorkflowTree();
                 }
                 this.showToast('success', '✅', '완료 처리되었습니다.');
             }
@@ -15197,7 +15457,7 @@ ${incompleteInfo}
                         </div>`;
                     })()}
                     ${(() => {
-                        const doneItems = this.allData.workflows.filter(w => w.type !== 'report' && !w.isDeleted && w.completedProcessed);
+                        const doneItems = this.allData.workflows.filter(w => w.type !== 'report' && !w.isDeleted && !w.isArchived && w.completedProcessed);
                         if (doneItems.length === 0) return '';
                         return `<div class="wfm-folder-divider"></div>
                         <div class="wfm-folder-item${sel === '__done__' ? ' active' : ''}" onclick="app.wfmSelectFolder('__done__')">
@@ -15379,7 +15639,7 @@ ${incompleteInfo}
                     filtered = this.allData.workflows.filter(w => w.type !== 'report' && w.isArchived && !w.isDeleted)
                         .sort((a, b) => b.id - a.id);
                 } else if (this.wfmSelectedFolder === '__done__') {
-                    filtered = this.allData.workflows.filter(w => w.type !== 'report' && !w.isDeleted && w.completedProcessed)
+                    filtered = this.allData.workflows.filter(w => w.type !== 'report' && !w.isDeleted && !w.isArchived && w.completedProcessed)
                         .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0));
                 } else {
                     filtered = allWorkflows;
@@ -15449,6 +15709,12 @@ ${incompleteInfo}
             // 검색 및 필터링 적용
             filterWorkflowTree() {
                 this.renderWorkflowTree();
+            }
+
+            // 검색창 입력 시 매 키 입력마다 전체 트리를 재렌더링하지 않도록 디바운스
+            debouncedFilterWorkflowTree() {
+                if (this._wfmSearchDebounceTimer) clearTimeout(this._wfmSearchDebounceTimer);
+                this._wfmSearchDebounceTimer = setTimeout(() => this.filterWorkflowTree(), 250);
             }
             
             // 폴더트리 구조 생성
@@ -15733,20 +15999,24 @@ ${incompleteInfo}
                 
                 const newPath = parts.slice(0, -1).concat(newName.trim()).join('/');
                 
-                // 해당 경로의 모든 업무 경로 업데이트
+                // 해당 경로의 모든 업무 경로 업데이트 (경로 경계를 정확히 확인 — 접두어만 같은
+                // 무관한 형제 폴더(예: "보고" 변경 시 "보고서"까지 손상되던 문제)를 방지)
                 this.allData.workflows.forEach(workflow => {
-                    if (workflow.folderPath && workflow.folderPath.startsWith(oldPath)) {
-                        workflow.folderPath = workflow.folderPath.replace(oldPath, newPath);
+                    if (!workflow.folderPath) return;
+                    if (workflow.folderPath === oldPath) {
+                        workflow.folderPath = newPath;
+                    } else if (workflow.folderPath.startsWith(oldPath + '/')) {
+                        workflow.folderPath = newPath + workflow.folderPath.slice(oldPath.length);
                     }
                 });
-                
+
                 // allData.folders에서도 폴더 경로 업데이트
                 if (this.allData.folders && Array.isArray(this.allData.folders)) {
                     this.allData.folders = this.allData.folders.map(folder => {
                         if (folder === oldPath) {
                             return newPath;
                         } else if (folder.startsWith(oldPath + '/')) {
-                            return folder.replace(oldPath, newPath);
+                            return newPath + folder.slice(oldPath.length);
                         }
                         return folder;
                     });
@@ -17324,7 +17594,7 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
                         this._newWorkflowIds = new Set(importedWorkflowIds);
                         this.lastCreatedWorkflowId = importedWorkflowIds[0];
                     }
-                    this.saveDataImmediate();
+                    await this.saveDataImmediate();
                     this.updateStats();
                     this.displayWorkflows();
                     this.displayTemplates();
@@ -17831,6 +18101,7 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
             // ── Gemini SSE 스트리밍 ───────────────────────────────────────
             async callGeminiStream(prompt, model, apiKey, generationConfig, contentsOverride, onChunk, retryCount = 0) {
                 const maxRetries = 2;
+                const idleTimeout = 30000; // 응답(헤더/청크)이 30초 이상 없으면 중단 (무한 대기 방지)
                 const requestBody = {
                     systemInstruction: { parts: [{ text: this._geminiSystemInstruction() }] },
                     contents: contentsOverride || [{ parts: [{ text: prompt }] }]
@@ -17838,13 +18109,33 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
                 if (generationConfig) requestBody.generationConfig = generationConfig;
 
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody)
-                });
+
+                const controller = new AbortController();
+                let idleTimer = setTimeout(() => controller.abort(), idleTimeout);
+                const resetIdleTimer = () => {
+                    clearTimeout(idleTimer);
+                    idleTimer = setTimeout(() => controller.abort(), idleTimeout);
+                };
+
+                let response;
+                try {
+                    response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(requestBody),
+                        signal: controller.signal
+                    });
+                } catch (err) {
+                    clearTimeout(idleTimer);
+                    if (err.name === 'AbortError') {
+                        throw new Error('Gemini 스트리밍 응답 시간 초과 (응답 없음)');
+                    }
+                    throw err;
+                }
+                resetIdleTimer();
 
                 if (response.status === 503) {
+                    clearTimeout(idleTimer);
                     if (retryCount < maxRetries) {
                         const waitTime = 2000 * (retryCount + 1);
                         console.log(`⚠️ Gemini 스트리밍 503 - ${retryCount + 1}/${maxRetries} 재시도 (${waitTime/1000}초 대기)`);
@@ -17855,6 +18146,7 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
                 }
 
                 if (!response.ok) {
+                    clearTimeout(idleTimer);
                     throw new Error(`Gemini 스트리밍 오류: ${response.status}`);
                 }
 
@@ -17863,24 +18155,37 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
                 let buffer     = '';
                 let fullText   = '';
 
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    buffer += decoder.decode(value, { stream: true });
-
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop() || '';
-
-                    for (const line of lines) {
-                        if (!line.startsWith('data: ')) continue;
-                        const jsonStr = line.slice(6).trim();
-                        if (!jsonStr || jsonStr === '[DONE]') continue;
+                try {
+                    while (true) {
+                        let done, value;
                         try {
-                            const data  = JSON.parse(jsonStr);
-                            const chunk = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                            if (chunk) { fullText += chunk; onChunk(chunk, fullText); }
-                        } catch (_) {}
+                            ({ done, value } = await reader.read());
+                        } catch (err) {
+                            if (err.name === 'AbortError') {
+                                throw new Error('Gemini 스트리밍 응답 시간 초과 (응답 없음)');
+                            }
+                            throw err;
+                        }
+                        resetIdleTimer();
+                        if (done) break;
+                        buffer += decoder.decode(value, { stream: true });
+
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || '';
+
+                        for (const line of lines) {
+                            if (!line.startsWith('data: ')) continue;
+                            const jsonStr = line.slice(6).trim();
+                            if (!jsonStr || jsonStr === '[DONE]') continue;
+                            try {
+                                const data  = JSON.parse(jsonStr);
+                                const chunk = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                                if (chunk) { fullText += chunk; onChunk(chunk, fullText); }
+                            } catch (_) {}
+                        }
                     }
+                } finally {
+                    clearTimeout(idleTimer);
                 }
                 return fullText;
             }
@@ -20022,13 +20327,23 @@ ${aiPartnerCitationFirstRules}
 
                     const successCount = embeddedChunks.filter(c => c.embedding && c.embedding.length > 0).length;
                     const totalCount = embeddedChunks.length;
+                    const isFullySuccessful = batchErrors.length === 0 && successCount === totalCount;
 
                     libFile.chunkEmbeddings = embeddedChunks;
                     libFile.embeddedAt = new Date().toISOString();
                     libFile.embeddedChunkCount = successCount;
                     libFile.totalChunkCount = totalCount;
-                    libFile.embeddingModel = EMB_MODEL;
-                    libFile.embeddingDims = EMB_DIMS;
+                    // 일부 청크라도 임베딩에 실패하면 embeddingModel/Dims를 설정하지 않는다.
+                    // 이 두 값은 백그라운드 큐(_startBackgroundEmbeddingCheck)가 "이미 완료됨"을
+                    // 판단하는 유일한 기준이라, 실패해도 여기 채워버리면 남은 청크가 영영
+                    // 재임베딩되지 않는 문제가 있었다.
+                    if (isFullySuccessful) {
+                        libFile.embeddingModel = EMB_MODEL;
+                        libFile.embeddingDims = EMB_DIMS;
+                    } else {
+                        delete libFile.embeddingModel;
+                        delete libFile.embeddingDims;
+                    }
                     libFile.embeddingError = batchErrors.length > 0 ? batchErrors[0] : null;
                     await this.dbManager.saveFile('lawLibrary', libFile);
                     return { success: true, successCount, totalCount, hasError: batchErrors.length > 0 };
@@ -20359,8 +20674,12 @@ ${aiPartnerCitationFirstRules}
             }
             async findDuplicateRepoDocument(file, hash) {
                 const docs = await this._getAllRepoDocuments();
-                return docs.find(d => (hash && d.contentHash && d.contentHash === hash) ||
-                                      (d.name === file.name && d.size === file.size)) || null;
+                return docs.find(d => {
+                    if (hash && d.contentHash) return d.contentHash === hash;
+                    // contentHash가 있는데 값이 다르면 이름·크기가 같아도 실제로는 다른 내용의 파일이므로
+                    // 오판(덮어쓰기)하지 않는다. 해시가 없는 구버전 레코드에 한해서만 이름+크기로 폴백 매칭.
+                    return !d.contentHash && d.name === file.name && d.size === file.size;
+                }) || null;
             }
 
             // 파일 업로드 (모든 형식 허용 — 같은 이름+크기 파일은 교체)
@@ -21342,12 +21661,20 @@ ${aiPartnerCitationFirstRules}
                 }
 
                 // ② 답변 내 법령명 기반 관련 법령 안내
-                const lawKeywords = ['법', '시행령', '시행규칙', '규정', '조례'];
+                // "방법", "위법", "불법"처럼 법령명이 아닌 일반 단어가 "법"으로 끝나
+                // 정규식에 오탐되어 불필요한 법제처 API 호출이 발생하는 것을 방지하는 제외 목록
+                const LAW_NAME_STOPWORDS = new Set([
+                    '방법', '불법', '위법', '문법', '기법', '요법', '편법', '준법', '무법',
+                    '적법', '합법', '실정법', '현행법', '국내법', '해당법', '관계법', '변법'
+                ]);
                 const mentionedLaws = [];
                 const sentences = answerText.split(/[.。\n]/);
                 for (const s of sentences) {
                     const match = s.match(/[가-힣]{2,15}(?:법|시행령|시행규칙|규정|조례)/g);
-                    if (match) match.forEach(m => { if (!mentionedLaws.includes(m)) mentionedLaws.push(m); });
+                    if (match) match.forEach(m => {
+                        if (LAW_NAME_STOPWORDS.has(m)) return;
+                        if (!mentionedLaws.includes(m)) mentionedLaws.push(m);
+                    });
                 }
                 const relatedList = [];
                 for (const lawName of mentionedLaws.slice(0, 3)) {
@@ -23282,6 +23609,17 @@ ${aiPartnerCitationFirstRules}
                 return div.innerHTML;
             }
 
+            // onclick="...('${str}')" 형태로 HTML 속성에 삽입되는 JS 문자열 리터럴 이스케이프.
+            // 사용자가 입력한 라벨/액션 문자열에 작은따옴표(')가 포함되면 onclick이 깨지거나
+            // 임의 JS가 실행될 수 있어, 백슬래시/따옴표/줄바꿈을 이스케이프한다.
+            escapeJsAttr(text) {
+                return String(text ?? '')
+                    .replace(/\\/g, '\\\\')
+                    .replace(/'/g, "\\'")
+                    .replace(/"/g, '&quot;')
+                    .replace(/\r?\n/g, '\\n');
+            }
+
             // AI 응답을 읽기 좋은 HTML로 변환
             formatAIResponse(text) {
                 if (!text) return '';
@@ -23674,11 +24012,16 @@ ${aiPartnerCitationFirstRules}
                 // 항목 건너뛰기 실행 이력 저장 (되돌리기를 위해)
                 const skippedItemIds = [];
 
+                // 이 분기 실행을 고유하게 식별하는 ID (되돌리기 시 label 텍스트 비교 대신 사용 —
+                // label이 비어있거나 다른 분기와 이름이 같으면 엉뚱한 항목까지 복구되는 문제를 방지)
+                const actionId = this.generateChecklistItemId();
+
                 // 1. 자기 자신 처리 (self 키워드 여부에 따라 미수행 or 완료)
                 const skipSelf = /\bself\b/.test(action);
                 if (skipSelf) {
                     currentItem.skipped = true;
                     currentItem.skipReason = `${label} (자기 분기 처리)`;
+                    currentItem.skipActionId = actionId;
                     currentItem.completed = false;
                     skippedItemIds.push(this.ensureChecklistItemId(currentItem));
                 } else {
@@ -23719,6 +24062,7 @@ ${aiPartnerCitationFirstRules}
                                     
                                     workflow.checklist[i].skipped = true;
                                     workflow.checklist[i].skipReason = `${label} (${currentItem.text})`;
+                                    workflow.checklist[i].skipActionId = actionId;
                                     workflow.checklist[i].completed = false; // 건너뛴 항목은 완료 상태 아님
                                 }
                             }
@@ -23733,6 +24077,7 @@ ${aiPartnerCitationFirstRules}
                 currentItem.branchActionTaken = {
                     action: action,
                     label: label,
+                    actionId: actionId, // ⭐ 되돌리기 시 정확한 소유권 판별용 고유 ID
                     timestamp: new Date().toISOString(),
                     skippedItemIds: skippedItemIds // ⭐ ID 목록 저장 (인덱스 대신)
                 };
@@ -23828,8 +24173,8 @@ ${aiPartnerCitationFirstRules}
 
                 if (!confirm('항목 건너뛰기를 취소하시겠습니까?\n건너뛰었던 항목들이 다시 활성화됩니다.')) return;
 
-                const { action, label, skippedItemIds } = currentItem.branchActionTaken;
-                
+                const { action, label, actionId, skippedItemIds } = currentItem.branchActionTaken;
+
                 // 1. skip된 항목들 복구 (ID 기반으로 정확히 복구)
                 if (action && action.startsWith('skip:')) {
                     // ⭐ 새로운 방식: 저장된 itemId 목록을 사용하여 정확히 복구
@@ -23840,12 +24185,18 @@ ${aiPartnerCitationFirstRules}
                                 const id = this.ensureChecklistItemId(c);
                                 return id === itemId;
                             });
-                            
+
                             if (item) {
-                                // 해당 분기로 인해 skip된 것인지 확인 (다른 분기에 의해 skip된 것은 유지)
-                                if (item.skipReason && item.skipReason.startsWith(label)) {
+                                // 해당 분기로 인해 skip된 것인지 확인 (다른 분기에 의해 skip된 것은 유지).
+                                // actionId가 있으면 고유 ID로 정확히 비교하고, 없는 구버전 데이터만
+                                // label 문자열 비교로 폴백 (label이 같거나 비어있으면 오복구될 수 있는 구버전 한계).
+                                const matches = actionId
+                                    ? item.skipActionId === actionId
+                                    : (item.skipReason && item.skipReason.startsWith(label));
+                                if (matches) {
                                     delete item.skipped;
                                     delete item.skipReason;
+                                    delete item.skipActionId;
                                 }
                             }
                         });
@@ -24166,7 +24517,7 @@ ${aiPartnerCitationFirstRules}
                         ? `<div style="padding:10px 12px;background:var(--bg-light);border-radius:8px;border:1px solid var(--border-subtle);margin-bottom:12px;">
                                <div style="font-size:0.69rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:7px;">항목 건너뛰기 실행</div>
                                <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                                   ${valids.map(o => `<button onclick="app.handleBranchOption(${workflowId},${index},'${o.action}','${o.label}')" style="padding:5px 13px;font-size:0.8rem;background:transparent;color:${o.color||'var(--accent)'};border:1px solid ${o.color||'rgba(37,99,235,0.3)'};border-radius:5px;cursor:pointer;font-weight:600;font-family:inherit;transition:background 0.15s;" onmouseover="this.style.background='rgba(0,0,0,0.04)'" onmouseout="this.style.background='transparent'">${o.label}</button>`).join('')}
+                                   ${valids.map(o => `<button onclick="app.handleBranchOption(${workflowId},${index},'${this.escapeJsAttr(o.action)}','${this.escapeJsAttr(o.label)}')" style="padding:5px 13px;font-size:0.8rem;background:transparent;color:${o.color||'var(--accent)'};border:1px solid ${o.color||'rgba(37,99,235,0.3)'};border-radius:5px;cursor:pointer;font-weight:600;font-family:inherit;transition:background 0.15s;" onmouseover="this.style.background='rgba(0,0,0,0.04)'" onmouseout="this.style.background='transparent'">${this.escapeHtml(o.label)}</button>`).join('')}
                                </div>
                            </div>`
                         : '';
@@ -24311,7 +24662,7 @@ ${aiPartnerCitationFirstRules}
                             ? `<div style="padding:10px 12px;background:var(--bg-light);border-radius:8px;border:1px solid var(--border-subtle);margin-bottom:12px;">
                                    <div style="font-size:0.69rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:7px;">항목 건너뛰기 실행</div>
                                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                                       ${valids.map(o => `<button onclick="app.handleBranchOption(${workflowId},${index},'${o.action}','${o.label}')" style="padding:5px 13px;font-size:0.8rem;background:transparent;color:${o.color||'var(--accent)'};border:1px solid ${o.color||'rgba(37,99,235,0.3)'};border-radius:5px;cursor:pointer;font-weight:600;font-family:inherit;transition:background 0.15s;" onmouseover="this.style.background='rgba(0,0,0,0.04)'" onmouseout="this.style.background='transparent'">${o.label}</button>`).join('')}
+                                       ${valids.map(o => `<button onclick="app.handleBranchOption(${workflowId},${index},'${this.escapeJsAttr(o.action)}','${this.escapeJsAttr(o.label)}')" style="padding:5px 13px;font-size:0.8rem;background:transparent;color:${o.color||'var(--accent)'};border:1px solid ${o.color||'rgba(37,99,235,0.3)'};border-radius:5px;cursor:pointer;font-weight:600;font-family:inherit;transition:background 0.15s;" onmouseover="this.style.background='rgba(0,0,0,0.04)'" onmouseout="this.style.background='transparent'">${this.escapeHtml(o.label)}</button>`).join('')}
                                    </div>
                                </div>`
                             : '';
@@ -24326,7 +24677,7 @@ ${aiPartnerCitationFirstRules}
                         if (validOptions.length === 0 && btnContainer) {
                             btnContainer.remove();
                         } else if (validOptions.length > 0) {
-                            const newBtnHtml = `<div class="branch-buttons" style="display:flex;gap:4px;">${validOptions.map(opt => `<button onclick="event.stopPropagation();app.handleBranchOption(${workflowId},${index},'${opt.action}','${opt.label}')" style="padding:3px 9px;font-size:0.75rem;background:transparent;color:${opt.color||'var(--accent)'};border:1px solid ${opt.color||'rgba(37,99,235,0.3)'};border-radius:5px;cursor:pointer;font-weight:600;transition:background 0.15s;font-family:inherit;" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='transparent'">${opt.label}</button>`).join('')}</div>`;
+                            const newBtnHtml = `<div class="branch-buttons" style="display:flex;gap:4px;">${validOptions.map(opt => `<button onclick="event.stopPropagation();app.handleBranchOption(${workflowId},${index},'${this.escapeJsAttr(opt.action)}','${this.escapeJsAttr(opt.label)}')" style="padding:3px 9px;font-size:0.75rem;background:transparent;color:${opt.color||'var(--accent)'};border:1px solid ${opt.color||'rgba(37,99,235,0.3)'};border-radius:5px;cursor:pointer;font-weight:600;transition:background 0.15s;font-family:inherit;" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='transparent'">${this.escapeHtml(opt.label)}</button>`).join('')}</div>`;
                             if (btnContainer) { btnContainer.outerHTML = newBtnHtml; }
                             else { const t = header.querySelector('.item-title-text'); if (t) t.insertAdjacentHTML('afterend', newBtnHtml); }
                         }
@@ -26156,10 +26507,11 @@ ${originalContent}`;
             // 백업/내보내기용: API Key 등 민감 정보를 제거한 데이터 사본 생성
             getSafeAllData() {
                 const data = JSON.parse(JSON.stringify(this.allData));
-                // API 키 제거
+                // API 키 제거 (법제처 OC 인증키 포함 — 백업/내보내기 파일에 유출되지 않도록)
                 if (data.geminiApiKey) data.geminiApiKey = '';
                 if (data.chatgptApiKey) data.chatgptApiKey = '';
                 if (data.claudeApiKey) data.claudeApiKey = '';
+                if (data.lawApiKey) data.lawApiKey = '';
                 return data;
             }
 
@@ -26403,7 +26755,7 @@ ${originalContent}`;
                     const stats = JSON.parse(saved);
                     
                     // 한국시간 오후 5시 이후 자동 리셋 체크
-                    if (this.shouldAutoReset()) {
+                    if (this.shouldAutoReset(stats)) {
                         console.log('🔄 한국시간 오후 5시 이후 자동 리셋 실행');
                         const newStats = this.getDefaultAIStats();
                         this.saveAIStats(newStats);
@@ -26446,46 +26798,23 @@ ${originalContent}`;
                 return this.aiUsageStats.modelCalls[model] || 0;
             }
             
-            // 한국시간 기준 오후 4시 이후인지 확인 (Google 일일 할당량 KST 16:00 초기화)
-            isAfterResetKST() {
-                const now = new Date();
-                const utcTime = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
-                const kstTime = new Date(utcTime + (9 * 60 * 60 * 1000));
-                const kstHour = kstTime.getHours();
-                return kstHour >= 16; // 오후 4시(16시) 이후
-            }
-            isAfter5PMKST() { return this.isAfterResetKST(); } // 하위 호환성 유지
-
-            // 한국시간 기준 오후 4시 이후 첫 실행인지 확인
-            shouldAutoReset() {
-                if (!this.isAfterResetKST()) {
-                    return false; // 오후 4시 이전이면 리셋 안 함
-                }
-                
-                if (!this.aiUsageStats || !this.aiUsageStats.lastResetTime) {
+            // 저장된 통계(statsToCheck)를 기준으로 리셋이 필요한지 확인.
+            // Google 일일 할당량은 미국 태평양시(LA) 자정 기준으로 초기화된다.
+            // 예전엔 KST 오후 4시를 고정값으로 가정했는데, 이는 서머타임(PDT, 3월~11월) 기간에만
+            // 맞고 표준시(PST, 11월~3월) 기간에는 실제로는 오후 5시가 기준이라 최대 1시간 오차가
+            // 있었다. 태평양시 날짜를 Intl.DateTimeFormat으로 직접 비교하면 서머타임이 자동 반영된다.
+            // 예전엔 아직 대입되기 전인 this.aiUsageStats(항상 undefined)를 검사해서,
+            // 태평양시 자정 이후 새로고침할 때마다 이미 리셋한 통계를 또 리셋해버리는 문제가 있었다.
+            shouldAutoReset(statsToCheck) {
+                const stats = statsToCheck || this.aiUsageStats;
+                if (!stats || !stats.lastResetTime) {
                     return true; // 통계가 없거나 리셋 시간이 없으면 리셋
                 }
-                
-                // 현재 시간을 한국시간으로 변환
-                const now = new Date();
-                const nowUTC = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
-                const nowKST = new Date(nowUTC + (9 * 60 * 60 * 1000));
-                const nowKSTDate = nowKST.toISOString().split('T')[0]; // YYYY-MM-DD
-                
-                // 마지막 리셋 시간을 한국시간으로 변환
-                const lastReset = new Date(this.aiUsageStats.lastResetTime);
-                const lastResetUTC = lastReset.getTime() + (lastReset.getTimezoneOffset() * 60 * 1000);
-                const lastResetKST = new Date(lastResetUTC + (9 * 60 * 60 * 1000));
-                const lastResetKSTDate = lastResetKST.toISOString().split('T')[0]; // YYYY-MM-DD
-                const lastResetHour = lastResetKST.getHours();
-                
-                // 날짜가 다르거나, 같은 날이지만 마지막 리셋이 오후 4시 이전이면 리셋 필요
-                if (nowKSTDate !== lastResetKSTDate) {
-                    return true; // 날짜가 다르면 리셋 (다음날 오후 4시 이후 실행)
-                }
 
-                // 같은 날이면 마지막 리셋이 오후 4시 이전인지 확인
-                return lastResetHour < 16;
+                // 태평양시 기준 달력 날짜가 마지막 리셋 이후로 바뀌었으면 리셋 필요
+                const nowPacificDate = _getPacificDateString(new Date());
+                const lastResetPacificDate = _getPacificDateString(new Date(stats.lastResetTime));
+                return nowPacificDate !== lastResetPacificDate;
             }
             
             saveAIStats(stats) {
@@ -26707,7 +27036,7 @@ ${originalContent}`;
                             ${thinkingChain.map(m=>chainRow(m,'#8b5cf6')).join('')}
                             <p style="font-size:0.72rem;font-weight:600;color:var(--text-muted);margin:10px 0 6px;">Lite 체인</p>
                             ${liteChain.map(m=>chainRow(m,'#2563eb')).join('')}
-                            <p style="font-size:0.69rem;color:var(--text-muted);margin:8px 0 0;">초기화: 매일 오후 4시 KST</p>
+                            <p style="font-size:0.69rem;color:var(--text-muted);margin:8px 0 0;">초기화: 매일 오후 4~5시 KST (미국 서머타임에 따라 다름)</p>
                         </div>
                     </div>`;
                 }
@@ -26817,7 +27146,7 @@ ${originalContent}`;
                         ${sectionLabel('임베딩 API 사용량')}
                         <div style="background:var(--bg-light);border:1px solid var(--border-subtle);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:10px;">
                             ${embRows.join('')}
-                            <p style="font-size:0.69rem;color:var(--text-muted);margin:0;">총 ${embTotal}회 · 모델별 일한도 1,000회 · 초기화: 매일 오후 4시 KST</p>
+                            <p style="font-size:0.69rem;color:var(--text-muted);margin:0;">총 ${embTotal}회 · 모델별 일한도 1,000회 · 초기화: 매일 오후 4~5시 KST (미국 서머타임에 따라 다름)</p>
                         </div>
                     </div>`;
                 }
@@ -29374,17 +29703,30 @@ ${originalContent}`;
         // 마트료시카 출력 차원 (3072 → 768): 저장 공간 75% 절감, 검색 속도 향상, 품질 유지
         const EMB_DIMS = 768;
 
+        // 미국 태평양시(LA) 기준 날짜 문자열(YYYY-MM-DD) — Google API 일일 할당량은
+        // 이 시간대의 자정 기준으로 초기화된다. Intl.DateTimeFormat이 서머타임(DST)을
+        // 자동으로 반영하므로, 수동으로 UTC 오프셋을 더하고 빼는 계산보다 안전하다.
+        // (예전 방식은 오프셋 부호가 뒤섞여 있었고, KST 시각을 고정값(16시)으로 가정해
+        //  서머타임 기간에는 최대 1시간 오차로 리셋 시점이 어긋나는 문제가 있었다)
+        function _getPacificDateString(date) {
+            const parts = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Los_Angeles',
+                year: 'numeric', month: '2-digit', day: '2-digit'
+            }).formatToParts(date || new Date());
+            const map = {};
+            parts.forEach(p => { map[p.type] = p.value; });
+            return `${map.year}-${map.month}-${map.day}`;
+        }
+
         function _loadEmbStats() {
             try {
                 const raw = localStorage.getItem(EMB_STATS_KEY);
                 if (!raw) return _defaultEmbStats();
                 const s = JSON.parse(raw);
-                // KST 오후 4시 이후 첫 접근 시 리셋
-                const nowUTC = Date.now() + new Date().getTimezoneOffset() * 60000;
-                const nowKST = new Date(nowUTC + 9 * 3600000);
-                const lastKST = new Date((s.lastResetTime || 0) + 9 * 3600000 - new Date().getTimezoneOffset() * 60000);
-                const sameDay = nowKST.toDateString() === lastKST.toDateString();
-                if (!sameDay || (nowKST.getHours() >= 16 && lastKST.getHours() < 16)) return _defaultEmbStats();
+                // 태평양시 기준 달력 날짜가 바뀌었으면 리셋 (Google 일일 할당량 초기화 시점)
+                const nowDate = _getPacificDateString(new Date());
+                const lastDate = _getPacificDateString(new Date(s.lastResetTime || 0));
+                if (nowDate !== lastDate) return _defaultEmbStats();
                 return s;
             } catch(e) { return _defaultEmbStats(); }
         }
