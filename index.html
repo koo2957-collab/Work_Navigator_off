@@ -19540,6 +19540,7 @@ ${aiPartnerCitationFirstRules}
                         fileData.id = existing.id;
                         await this.dbManager.saveFile('lawLibrary', fileData);
                         this._invalidateLibraryFileCache(existing.id);
+                        await this._purgeLawLibraryPdfCache(file.name);
                         savedId = existing.id;
                         replaced++;
                     } else {
@@ -19581,7 +19582,9 @@ ${aiPartnerCitationFirstRules}
             // 자료실 파일 삭제
             async deleteLawLibraryFile(id) {
                 if (!confirm('법령·매뉴얼에서 이 파일을 삭제할까요?\n연결된 업무카드에서도 해제됩니다.')) return;
+                const target = await this._getLibraryFileById(id);
                 await this.dbManager.deleteFile('lawLibrary', id);
+                if (target?.name) await this._purgeLawLibraryPdfCache(target.name);
                 const ord = this._getLibraryFileSortOrders();
                 delete ord[id];
                 this._saveLibraryFileSortOrders(ord);
@@ -19596,6 +19599,21 @@ ${aiPartnerCitationFirstRules}
                 }
                 await this._renderLawLibraryList();
                 this.showToast('success', '✅', '삭제 완료');
+            }
+
+            // 법령·매뉴얼 파일의 파싱 텍스트 캐시(pdfDocuments) 삭제
+            // 파일이 삭제되거나 같은 이름으로 교체 업로드될 때 호출 — 안 지우면
+            // _getLinkedLibraryDocs()가 예전에 파싱해둔 내용을 계속 재사용하게 됨
+            async _purgeLawLibraryPdfCache(fileName) {
+                if (!fileName) return;
+                try {
+                    const matches = await this.dbManager.getFilesByIndex('pdfDocuments', 'fileName', fileName);
+                    for (const m of matches) {
+                        if (m.projectId === 'lawLibrary') {
+                            await this.dbManager.deleteFile('pdfDocuments', m.id);
+                        }
+                    }
+                } catch (e) { console.warn('법령·매뉴얼 캐시 삭제 실패:', fileName, e); }
             }
 
             // 자료실 전체 파일 조회
@@ -28713,6 +28731,7 @@ ${originalContent}`;
                     str: item.str,
                     x: item.transform[4],
                     y: item.transform[5],
+                    width: item.width || 0,
                     fontSize: Math.abs(item.transform[0]) || Math.abs(item.transform[3]) || 12
                 }));
             if (positioned.length === 0) return '';
@@ -28734,11 +28753,28 @@ ${originalContent}`;
             }
 
             // 4. 줄 내 x좌표 순 정렬 후 텍스트 합치기
-            const lineTexts = lines.map(line => ({
-                text: line.items.sort((a, b) => a.x - b.x).map(i => i.str).join(''),
-                y: line.y,
-                fontSize: line.maxFontSize
-            }));
+            // pdf.js는 실제 공백 문자가 PDF 내부에 있을 때만 str에 공백을 포함시킨다.
+            // 한글 공공문서(특히 한글/HWP → PDF 변환본)는 단어 사이 간격을 공백 문자 없이
+            // 좌표 이동만으로 표현하는 경우가 많아, 그냥 이어붙이면 "관련법령에따라"처럼
+            // 띄어쓰기가 사라진다. 조각 사이 x좌표 간격이 폰트크기 대비 충분히 벌어져 있으면
+            // 단어 경계로 보고 공백을 삽입한다.
+            const SPACE_GAP_RATIO = 0.2;
+            const lineTexts = lines.map(line => {
+                const sorted = line.items.slice().sort((a, b) => a.x - b.x);
+                let text = '';
+                for (let i = 0; i < sorted.length; i++) {
+                    const item = sorted[i];
+                    if (i > 0) {
+                        const prev = sorted[i - 1];
+                        const gap = item.x - (prev.x + prev.width);
+                        const needsSpace = gap > prev.fontSize * SPACE_GAP_RATIO
+                            && !/\s$/.test(text) && !/^\s/.test(item.str);
+                        if (needsSpace) text += ' ';
+                    }
+                    text += item.str;
+                }
+                return { text, y: line.y, fontSize: line.maxFontSize };
+            });
 
             // 5. 평균 줄 간격 계산 (이상치 제외)
             let avgGap = 14;
