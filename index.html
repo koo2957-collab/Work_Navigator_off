@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 업무 내비게이터</title>
+    <title>업무 내비게이터</title>
     <!-- 오프라인 벤더링: 외부 CDN(jsDelivr/Google Fonts/cdnjs) 대신 로컬 vendor/ 폴더의 파일을 사용 -->
     <link rel="stylesheet" href="./vendor/fonts/pretendard.css">
     <script src="./vendor/pdf.min.js"></script>
@@ -4186,7 +4186,6 @@
             <div class="header-left">
                 <h1>
                     <svg class="brand-spark" width="20" height="20" viewBox="0 0 24 24" fill="#ffffff" stroke="#a78bfa" stroke-width="0.8" style="flex-shrink:0;filter:drop-shadow(0 0 6px rgba(167,139,250,0.9)) drop-shadow(0 0 16px rgba(167,139,250,0.4));"><path fill-rule="evenodd" clip-rule="evenodd" d="M9 4.5a.75.75 0 01.721.544l.813 2.846a3.75 3.75 0 002.576 2.576l2.846.813a.75.75 0 010 1.442l-2.846.813a3.75 3.75 0 00-2.576 2.576l-.813 2.846a.75.75 0 01-1.442 0l-.813-2.846a3.75 3.75 0 00-2.576-2.576l-2.846-.813a.75.75 0 010-1.442l2.846-.813A3.75 3.75 0 007.466 7.89l.813-2.846A.75.75 0 019 4.5zM18 1.5a.75.75 0 01.728.568l.258 1.036c.236.94.97 1.674 1.91 1.91l1.036.258a.75.75 0 010 1.456l-1.036.258a2.25 2.25 0 00-1.91 1.91l-.258 1.036a.75.75 0 01-1.456 0l-.258-1.036a2.25 2.25 0 00-1.91-1.91l-1.036-.258a.75.75 0 010-1.456l1.036-.258a2.25 2.25 0 001.91-1.91l.258-1.036A.75.75 0 0118 1.5z"/></svg>
-                    <span class="brand-ai-txt">ai</span>
                     <span class="brand-nav-txt">업무 내비게이터</span>
                 </h1>
             </div>
@@ -4588,8 +4587,8 @@
                 </div>
             </div>
 
-            <!-- ② AI 보조 섹션 (접이식) -->
-            <div style="flex-shrink:0;padding:8px 20px 0;">
+            <!-- ② AI 보조 섹션 (접이식) — AI 미연결 시 통째로 숨김, 연결되면 자동으로 다시 표시 -->
+            <div id="manualAiSectionWrapper" style="flex-shrink:0;padding:8px 20px 0;">
                 <div style="border:1px solid var(--border-light);border-radius:8px;overflow:hidden;">
                     <!-- 토글 헤더 -->
                     <button onclick="app._toggleManualAiSection()" id="manualAiToggleBtn"
@@ -4616,7 +4615,7 @@
                                 <span>PDF 드래그 또는 클릭해서 첨부</span>
                                 <span style="font-size:0.7rem;color:var(--text-muted);">PDF · 최대 50MB · 구조 인식 최적</span>
                             </div>
-                            <button onclick="app.fillChecklistWithAI()"
+                            <button id="manualAiFillBtn" onclick="app.fillChecklistWithAI()"
                                 style="flex-shrink:0;display:flex;align-items:center;gap:5px;padding:7px 13px;font-size:0.82rem;font-weight:700;background:var(--accent);color:white;border:none;border-radius:7px;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background 0.15s;"
                                 onmouseover="this.style.background='var(--accent-dark)'"
                                 onmouseout="this.style.background='var(--accent)'">
@@ -4637,12 +4636,12 @@
                     <label style="font-size:0.82rem;font-weight:700;color:var(--text-dark);">체크리스트 항목</label>
                     <button onclick="app._toggleManualHint()" id="manualHintToggle"
                         style="font-size:0.72rem;color:var(--accent);background:rgba(37,99,235,0.07);border:1px solid rgba(37,99,235,0.18);border-radius:10px;padding:2px 9px;cursor:pointer;font-family:inherit;transition:background 0.15s;">
-                        사용법 ▾
+                        사용법 ▴
                     </button>
                 </div>
 
-                <!-- 사용법 박스 (기본 숨김, 토글로 열기) -->
-                <div id="manualHintBox" style="flex-shrink:0;display:none;background:rgba(37,99,235,0.04);border:1px solid rgba(37,99,235,0.12);border-radius:8px;padding:8px 12px;margin-bottom:8px;">
+                <!-- 사용법 박스 (처음 사용자가 바로 알 수 있도록 기본 펼침, 토글로 접기) -->
+                <div id="manualHintBox" style="flex-shrink:0;display:block;background:rgba(37,99,235,0.04);border:1px solid rgba(37,99,235,0.12);border-radius:8px;padding:8px 12px;margin-bottom:8px;">
                     <div style="display:flex;flex-direction:column;gap:5px;">
                         <div style="display:flex;flex-wrap:wrap;gap:4px 14px;">
                             <span style="font-size:0.72rem;color:var(--text-gray);display:flex;align-items:center;gap:3px;"><kbd style="background:var(--white);border:1px solid var(--border-light);border-radius:3px;padding:1px 5px;font-size:0.67rem;font-family:inherit;color:var(--text-dark);">Enter</kbd>다음 항목 추가</span>
@@ -17852,6 +17851,18 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
                     dashboard.style.display = showChat ? 'none' : '';
                     if (!showChat) this._renderAIPanelOfflineDashboard();
                 }
+
+                // 새 업무 작성 패널의 "AI로 채우기" 버튼도 같이 갱신 (AI 연결되면 자동 활성화)
+                this.updateManualAiFillButtonState();
+            }
+
+            // "새 업무" 패널의 "AI로 체크리스트 채우기" 섹션은 AI 없이는 대체 기능이 없으므로
+            // (수동 입력 외에 대안이 없음) 반쯤 비활성화된 버튼을 보여주기보다 통째로 숨기고,
+            // AI가 연결되면 자동으로 다시 나타나게 함.
+            updateManualAiFillButtonState() {
+                const wrapper = document.getElementById('manualAiSectionWrapper');
+                if (!wrapper) return;
+                wrapper.style.display = this.isAIAvailable() ? '' : 'none';
             }
 
             // AI 미연결 시 패널이 열려 있고 실제로 현황판을 보여주는 중이면 최신 데이터로 다시 그림.
@@ -23577,11 +23588,12 @@ ${aiPartnerCitationFirstRules}
                     setTimeout(() => {
                         this._populateManualFolderSelect();
                         this.updateChecklistNumbers();
-                        // 사용법 박스 초기 상태 닫기
+                        this.updateManualAiFillButtonState();
+                        // 사용법 박스 초기 상태 펼침 (처음 사용하는 사람이 기능을 바로 알 수 있도록)
                         const hintBox = document.getElementById('manualHintBox');
                         const hintBtn = document.getElementById('manualHintToggle');
-                        if (hintBox) hintBox.style.display = 'none';
-                        if (hintBtn) hintBtn.textContent = '사용법 ▾';
+                        if (hintBox) hintBox.style.display = 'block';
+                        if (hintBtn) hintBtn.textContent = '사용법 ▴';
                         // 기존 작성 내용 감지 → 임시저장 배너 표시
                         const cl = document.getElementById('checklistItems');
                         const hasTitle = !!(document.getElementById('manualProjectName')?.value.trim());
