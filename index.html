@@ -5,16 +5,14 @@
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI 업무 내비게이터</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <!-- 오프라인 벤더링: 외부 CDN(jsDelivr/Google Fonts/cdnjs) 대신 로컬 vendor/ 폴더의 파일을 사용 -->
+    <link rel="stylesheet" href="./vendor/fonts/pretendard.css">
+    <script src="./vendor/pdf.min.js"></script>
+    <script src="./vendor/mammoth.browser.min.js"></script>
     <script>
         // PDF.js Worker 전역 설정 (모든 PDF 처리 함수에서 사용)
         if (typeof pdfjsLib !== 'undefined') {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.js';
         }
     </script>
     <!--
@@ -1714,6 +1712,38 @@
         :root.dark-mode .ai-model-opt:hover { background: rgba(255,255,255,0.07); }
         :root.dark-mode .ai-model-opt.active { background: rgba(37,99,235,0.18); }
         :root.dark-mode .ai-model-tag-muted { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.12); }
+
+        /* 절차/챗봇 전환 탭 */
+        .ai-panel-view-tabs {
+            flex-shrink: 0;
+            display: flex;
+            gap: 4px;
+            padding: 8px 14px 0;
+            background: var(--white);
+        }
+        .ai-panel-view-tab {
+            flex: 1;
+            padding: 7px 6px;
+            font-size: 0.76rem;
+            font-weight: 600;
+            font-family: inherit;
+            color: var(--text-muted);
+            background: var(--bg-light);
+            border: 1px solid transparent;
+            border-radius: 7px 7px 0 0;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+        }
+        .ai-panel-view-tab:hover:not(.disabled):not(.active) { background: var(--border-subtle); }
+        .ai-panel-view-tab.active {
+            color: #8b5cf6;
+            background: var(--white);
+            border-color: var(--border-subtle);
+            border-bottom-color: var(--white);
+        }
+        .ai-panel-view-tab.disabled { color: var(--text-muted); opacity: 0.5; cursor: not-allowed; }
+        :root.dark-mode .ai-panel-view-tabs { background: var(--white); }
+        :root.dark-mode .ai-panel-view-tab.active { background: var(--white); }
 
         /* 컨텍스트 토글 바 */
         .ai-context-bar {
@@ -4375,15 +4405,15 @@
             <!-- 리사이즈 핸들 -->
             <div class="ai-panel-resize-handle" id="aiPanelResizeHandle" title="크기 조절"></div>
             <!-- 기존 닫기 버튼 (CSS로 숨김, 호환성 유지) -->
-            <button class="ai-panel-close-btn" onclick="app.toggleAiPanel()" title="AI 패널 닫기">&times;</button>
+            <button class="ai-panel-close-btn" onclick="app.toggleAiPanel()" title="패널 닫기">&times;</button>
 
             <!-- ── 패널 헤더 ── -->
             <div class="ai-panel-header">
                 <div class="ai-panel-title-row">
                     <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-                        <div class="ai-panel-id-badge">AI</div>
+                        <div class="ai-panel-id-badge" id="aiPanelIdBadge">AI</div>
                         <div style="min-width:0;">
-                            <div class="ai-panel-title">업무 파트너</div>
+                            <div class="ai-panel-title" id="aiPanelTitleText">업무 파트너</div>
                             <div class="ai-panel-subtitle">행정 업무를 AI와 함께 처리하세요</div>
                         </div>
                     </div>
@@ -4391,8 +4421,14 @@
                 </div>
             </div>
 
+            <!-- ── 절차/챗봇 전환 탭 ── -->
+            <div class="ai-panel-view-tabs" id="aiPanelViewTabs">
+                <button class="ai-panel-view-tab" id="aiPanelTabProcedure" onclick="app.setAiPanelView('procedure')">📋 업무 절차</button>
+                <button class="ai-panel-view-tab" id="aiPanelTabChat" onclick="app.setAiPanelView('chat')">💬 AI 업무파트너</button>
+            </div>
+
             <!-- ── 현재업무 컨텍스트 토글 ── -->
-            <div class="ai-context-bar">
+            <div class="ai-context-bar" id="aiContextBar">
                 <label class="ai-context-label" for="useProjectContext">
                     <input type="checkbox" id="useProjectContext" name="useProjectContext" disabled style="display:none;">
                     <div class="ai-toggle-wrap disabled" id="aiToggleWrap"><div class="ai-toggle-knob"></div></div>
@@ -4402,8 +4438,11 @@
                 <span id="contextStatusBadge" style="display:none;padding:2px 8px;background:rgba(139,92,246,0.1);color:#8b5cf6;border:1px solid rgba(139,92,246,0.2);border-radius:20px;font-size:0.7rem;font-weight:700;flex-shrink:0;">연결됨</span>
             </div>
 
+            <!-- ── 업무 현황판 (AI 미연결 시 채팅 대신 표시) ── -->
+            <div id="aiPanelOfflineDashboard" style="display:none;flex:1;overflow-y:auto;"></div>
+
             <!-- ── 채팅 영역 ── -->
-            <div class="chat-container">
+            <div class="chat-container" id="aiPanelChatContainer">
                 <div class="chat-box" id="chatBox">
                     <div class="chat-message ai-message">
                         <div style="display:flex;flex-direction:column;width:100%;">
@@ -5243,7 +5282,7 @@
             <div style="padding:16px 22px 14px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
                 <div style="display:flex;align-items:center;gap:9px;">
                     <div style="width:3px;height:22px;background:var(--accent);border-radius:2px;"></div>
-                    <span style="font-size:0.95rem;font-weight:700;color:var(--text-dark);letter-spacing:-0.02em;">AI 설정</span>
+                    <span style="font-size:0.95rem;font-weight:700;color:var(--text-dark);letter-spacing:-0.02em;" id="settingsModalTitle">AI 설정</span>
                 </div>
                 <button class="close-btn" onclick="app.closeModal('settingsModal')">&times;</button>
             </div>
@@ -5251,6 +5290,20 @@
             <!-- 본문 -->
             <div style="padding:18px 22px;display:flex;flex-direction:column;gap:14px;max-height:calc(80dvh - 56px);overflow-y:auto;">
 
+                <!-- 사내 보안정책 잠금 안내: 외부 AI·법제처 API 입력 UI를 대체 -->
+                <div style="text-align:center;padding:22px 10px 8px;">
+                    <div style="width:42px;height:42px;margin:0 auto 12px;border-radius:11px;background:rgba(139,92,246,0.1);display:flex;align-items:center;justify-content:center;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
+                    <p style="font-weight:700;font-size:0.92rem;color:var(--text-dark);margin:0 0 6px;">외부 AI·API 연동이 비활성화되어 있습니다</p>
+                    <p style="font-size:0.78rem;color:var(--text-muted);line-height:1.65;margin:0;">
+                        사내 보안정책에 따라 외부 AI(Gemini·ChatGPT·Claude)와 법제처 Open API로의 연결이 차단되어 있으며, 개인 API 키를 등록할 수 없습니다.<br>
+                        사내 AI 연동이 준비되면 자동으로 활성화됩니다.
+                    </p>
+                </div>
+
+                <!-- 아래 입력 UI는 사내 AI 연동 시 관리자가 활성화하는 용도로 보존(화면 비노출) -->
+                <div style="display:none;">
                 <!-- AI 서비스 선택 -->
                 <div>
                     <p style="font-size:0.69rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin:0 0 8px;">AI 서비스</p>
@@ -5352,11 +5405,12 @@
                         </div>
                     </div>
                 </div>
+                </div>
+                <!-- //display:none 잠금 래퍼 끝 -->
 
                 <!-- 하단 -->
                 <div style="border-top:1px solid var(--border-subtle);padding-top:14px;display:flex;flex-direction:column;gap:8px;">
                     <div id="apiKeyActionButtons" style="display:none;"></div>
-                    <p style="font-size:0.71rem;color:var(--text-muted);text-align:center;margin:0;">API Key는 백업·내보내기 파일에 포함되지 않습니다</p>
                     <button class="btn btn-secondary" style="width:100%;" onclick="app.closeModal('settingsModal')">닫기</button>
                 </div>
 
@@ -7198,6 +7252,7 @@
                         }, 560);
                     });
                     localStorage.setItem('aiPanelHidden', 'false');
+                    this.updateAIPanelAvailabilityUI();
                 } else {
                     // 닫기: 패널 fade-out → 완료 후 그리드 축소 + 아이콘 등장 (순서 중요)
                     aiPanel.classList.remove('ai-panel-entering');
@@ -7239,6 +7294,7 @@
                     toggleIcon.classList.add('hidden');
                     mainLayout.classList.remove('ai-panel-visible');
                 }
+                this.updateAIPanelAvailabilityUI();
             }
 
             updateStats() {
@@ -10239,7 +10295,9 @@
                 
                 // 데이터 저장
                 this.saveData();
-                
+                // 체크/체크 해제 모두 업무 절차 패널(AI 미연결 시)을 최신 상태로 갱신
+                this.refreshAIPanelDashboardIfNeeded();
+
                 // UI 업데이트: 포커스 모드이면 체크리스트 영역만 부분 갱신 (전체 재구성 방지)
                 // 단, 진행률이 100%로 전환되거나 100%에서 내려올 때는 완료 처리 버튼 표시를 위해 전체 갱신
                 if (this.focusMode && this.focusedWorkflowId === workflowId) {
@@ -11100,9 +11158,9 @@ ${writtenSection}${docSection}
                 if (window.mammoth) return Promise.resolve(window.mammoth);
                 return new Promise((resolve, reject) => {
                     const s = document.createElement('script');
-                    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js';
+                    s.src = './vendor/mammoth.browser.min.js';
                     s.onload = () => window.mammoth ? resolve(window.mammoth) : reject(new Error('mammoth 로드 실패'));
-                    s.onerror = () => reject(new Error('mammoth.js CDN 로드 실패 — 인터넷 연결을 확인하세요'));
+                    s.onerror = () => reject(new Error('mammoth.js 로드 실패 — vendor 폴더가 index.html과 같은 위치에 있는지 확인하세요'));
                     document.head.appendChild(s);
                 });
             }
@@ -13288,6 +13346,7 @@ ${item.result.text}
                 }
                 
                 if (!apiKey) {
+                    this.refreshAIPanelDashboardIfNeeded(); // AI 미연결 시 업무 현황판을 최신 상태로 갱신
                     return; // API 키가 없으면 제안하지 않음
                 }
                 
@@ -13503,6 +13562,7 @@ ${nextDocContext ? `\n[참조 문서 - 업무 관련 첨부자료 요약]\n${nex
                 }
                 
                 if (!apiKey) {
+                    this.refreshAIPanelDashboardIfNeeded(); // AI 미연결 시 업무 현황판을 최신 상태로 갱신
                     return; // API 키가 없으면 제안하지 않음
                 }
                 
@@ -13736,14 +13796,25 @@ ${incompleteInfo}
             scrollToMainChecklistItem(workflowId, itemIndex) {
                 const workflow = this.allData.workflows.find(w => w.id === workflowId);
                 if (!workflow || !workflow.checklist) return;
-                
-                // 항목 펼치기
-                if (!workflow.checklist[itemIndex].expanded) {
-                    workflow.checklist[itemIndex].expanded = true;
-                    this.saveData();
-                    this.displayWorkflows();
+
+                // 이 함수로 자동으로 펼쳐뒀던 이전 항목이 있고, 지금 다른 항목으로 이동하는 것이면
+                // (사용자가 직접 펼친 게 아니라 탐색용으로 펼쳐졌던 것이므로) 다시 접어서 색상 강조가 누적되지 않게 함
+                const prevNav = this._lastNavExpandedItem;
+                if (prevNav && (prevNav.workflowId !== workflowId || prevNav.itemIndex !== itemIndex)) {
+                    const prevWorkflow = this.allData.workflows.find(w => w.id === prevNav.workflowId);
+                    const prevItem = prevWorkflow?.checklist?.[prevNav.itemIndex];
+                    if (prevItem && prevItem.expanded) prevItem.expanded = false;
                 }
-                
+
+                // 항목 펼치기 (원래 이미 펼쳐져 있던 항목이면 사용자가 직접 연 것으로 보고 자동 접기 대상에서 제외)
+                const alreadyExpanded = !!workflow.checklist[itemIndex].expanded;
+                this._lastNavExpandedItem = alreadyExpanded ? null : { workflowId, itemIndex };
+                if (!alreadyExpanded) {
+                    workflow.checklist[itemIndex].expanded = true;
+                }
+                this.saveData();
+                this.displayWorkflows();
+
                 // 스크롤
                 setTimeout(() => {
                     const element = document.querySelector(`[data-workflow-id="${workflowId}"][data-index="${itemIndex}"]`);
@@ -17703,13 +17774,229 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
                 } else if (provider === 'claude') {
                     key = this.allData.claudeApiKey;
                 }
-                
+
                 if (!key) {
-                    this.showToast('error', '⚠️', 'API 키를 먼저 설정하세요');
+                    this.showToast('error', '🔒', 'AI 기능은 사내 보안정책에 따라 비활성화되어 있습니다');
                     this.openModal('settingsModal');
                     return false;
                 }
                 return true;
+            }
+
+            // 토스트/모달 등 부수효과 없이 "현재 선택된 provider의 AI 호출이 가능한 상태인지"만 조용히 확인.
+            // 체크리스트 AI길잡이·AI 업무파트너 등에서 AI 유/무에 따라 동작을 분기할 때 사용.
+            isAIAvailable() {
+                const provider = this.allData.provider;
+                if (provider === 'gemini') return !!this.allData.geminiApiKey;
+                if (provider === 'chatgpt') return !!this.allData.chatgptApiKey;
+                if (provider === 'claude') return !!this.allData.claudeApiKey;
+                return false;
+            }
+
+            // AI 업무파트너 패널을 AI 연결 상태에 맞게 전환.
+            // AI 연결 시 챗봇 UI를, 미연결 시 업무 현황판(진행률·서식·업무팁)을 표시한다.
+            // AI 업무파트너 패널에서 지금 어떤 화면(챗봇/업무 절차)을 보여줄지 사용자가 직접 고를 수 있게 함.
+            // AI가 연결되어 있어도 절차 스텝퍼는 그 자체로 유용하므로, 연결 후에도 탭으로 전환해서 계속 쓸 수 있다.
+            setAiPanelView(mode) {
+                if (mode === 'chat' && !this.isAIAvailable()) {
+                    this.showToast('info', '🔒', 'AI 연동이 준비되면 이용할 수 있습니다');
+                    return;
+                }
+                this.aiPanelViewMode = mode;
+                this.updateAIPanelAvailabilityUI();
+            }
+
+            updateAIPanelAvailabilityUI() {
+                const available = this.isAIAvailable();
+                if (!available) {
+                    this.aiPanelViewMode = 'procedure'; // AI 미연결 시에는 절차 화면만 존재
+                } else if (!this.aiPanelViewMode) {
+                    this.aiPanelViewMode = 'chat'; // AI 연결 시 최초 기본값은 챗봇
+                }
+                const showChat = this.aiPanelViewMode === 'chat';
+
+                // 패널 배지·제목·부제 — 지금 보고 있는 화면(챗봇/절차)에 맞는 이름으로 전환
+                const badge = document.getElementById('aiPanelIdBadge');
+                if (badge) badge.textContent = showChat ? 'AI' : '절차';
+                const titleEl = document.getElementById('aiPanelTitleText');
+                if (titleEl) titleEl.textContent = showChat ? '업무 파트너' : '업무 절차';
+                const subtitle = document.querySelector('.ai-panel-subtitle');
+                if (subtitle) {
+                    subtitle.textContent = showChat ? '행정 업무를 AI와 함께 처리하세요' : '지금 단계·필요 서식을 한눈에 확인하세요';
+                }
+                const toggleIcon = document.getElementById('aiPanelToggleIcon');
+                if (toggleIcon) toggleIcon.title = showChat ? 'AI 업무파트너 열기' : '업무 절차 열기';
+
+                // 전환 탭 활성/비활성 상태 갱신
+                const tabProcedure = document.getElementById('aiPanelTabProcedure');
+                const tabChat = document.getElementById('aiPanelTabChat');
+                if (tabProcedure) tabProcedure.classList.toggle('active', !showChat);
+                if (tabChat) {
+                    tabChat.classList.toggle('active', showChat);
+                    tabChat.classList.toggle('disabled', !available);
+                }
+
+                // 설정 모달 제목 — 개인 API 키 입력 UI가 잠겨 있는 상태이므로 "AI" 대신 "연동"으로 표기
+                const settingsTitle = document.getElementById('settingsModalTitle');
+                if (settingsTitle) settingsTitle.textContent = available ? 'AI 설정' : '연동 설정';
+
+                // 챗봇 전용 컨텍스트 바는 절차 화면에서는 불필요하므로 함께 숨김
+                const contextBar = document.getElementById('aiContextBar');
+                if (contextBar) contextBar.style.display = showChat ? '' : 'none';
+
+                // 선택된 화면에 따라 채팅 UI / 업무 절차 스텝퍼 표시
+                const chatContainer = document.getElementById('aiPanelChatContainer');
+                const dashboard = document.getElementById('aiPanelOfflineDashboard');
+                if (chatContainer) chatContainer.style.display = showChat ? '' : 'none';
+                if (dashboard) {
+                    dashboard.style.display = showChat ? 'none' : '';
+                    if (!showChat) this._renderAIPanelOfflineDashboard();
+                }
+            }
+
+            // AI 미연결 시 패널이 열려 있고 실제로 현황판을 보여주는 중이면 최신 데이터로 다시 그림.
+            // (체크박스 토글·업무팁 저장 등 로컬 데이터 변경 직후 호출)
+            refreshAIPanelDashboardIfNeeded() {
+                // AI가 연결되어 있어도 사용자가 "업무 절차" 탭을 보고 있는 중일 수 있으므로
+                // AI 연결 여부가 아니라 현재 선택된 화면(aiPanelViewMode)을 기준으로 판단
+                if (this.aiPanelViewMode !== 'procedure') return;
+                const aiPanel = document.getElementById('aiPanel');
+                if (!aiPanel || aiPanel.classList.contains('hidden')) return;
+                this._renderAIPanelOfflineDashboard();
+            }
+
+            // 업무 절차 스텝퍼 렌더링: 현재 포커스 중인 업무의 체크리스트를 세로 타임라인으로 표시.
+            // 완료(✓)·진행중(●, 서식·팁 펼침)·예정(○) 상태만 남기고, 건너뛴 항목은 실제 진행할 절차가
+            // 아니므로 목록에서 아예 제외해 시인성을 높인다. AI 추론 없이 로컬 데이터만 사용한다.
+            _renderAIPanelOfflineDashboard() {
+                const container = document.getElementById('aiPanelOfflineDashboard');
+                if (!container) return;
+
+                const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const workflowId = this.focusedWorkflowId;
+                const workflow = this.allData.workflows.find(w => w.id === workflowId);
+
+                if (!workflow || !Array.isArray(workflow.checklist) || workflow.checklist.length === 0) {
+                    container.innerHTML = `
+                        <div style="padding:48px 24px;text-align:center;color:var(--text-muted,#8899aa);">
+                            <div style="font-size:0.82rem;line-height:1.6;">업무를 열면 업무 절차가<br>여기에 표시됩니다.</div>
+                        </div>`;
+                    return;
+                }
+
+                // 건너뛴(미완료) 항목은 실제로 진행할 절차가 아니므로 타임라인에서 제외 — 원래 인덱스는 보존(항목 이동에 필요)
+                const steps = workflow.checklist
+                    .map((item, idx) => ({ item, idx }))
+                    .filter(({ item }) => !(item.skipped && !this.normalizeCompleted(item)));
+                if (steps.length === 0) {
+                    container.innerHTML = `
+                        <div style="padding:48px 24px;text-align:center;color:var(--text-muted,#8899aa);">
+                            <div style="font-size:0.82rem;line-height:1.6;">모든 항목을 건너뛰어 표시할 절차가 없습니다.</div>
+                        </div>`;
+                    return;
+                }
+
+                const total = steps.length;
+                const completed = steps.filter(({ item }) => this.normalizeCompleted(item)).length;
+                const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                const currentStepPos = steps.findIndex(({ item }) => !this.normalizeCompleted(item));
+
+                // linkedDocs 메타 캐시가 아직 없으면 비동기로 로드 후 다시 그림 (다음 렌더에 반영)
+                if (!this._repoDocMetaCache) {
+                    this._loadRepoDocMetaCache().then(() => this.refreshAIPanelDashboardIfNeeded()).catch(() => {});
+                }
+
+                let deadlineHtml = '';
+                if (currentStepPos === -1) {
+                    deadlineHtml = `<span style="font-size:0.72rem;font-weight:700;color:#10b981;">🎉 완료</span>`;
+                } else if (workflow.deadline) {
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    const dl = new Date(workflow.deadline); dl.setHours(0, 0, 0, 0);
+                    const daysLeft = Math.round((dl - today) / 86400000);
+                    const dText = daysLeft < 0 ? `D+${Math.abs(daysLeft)}` : daysLeft === 0 ? 'D-Day' : `D-${daysLeft}`;
+                    const dColor = daysLeft < 0 ? '#ef4444' : daysLeft <= 3 ? '#f59e0b' : 'var(--text-muted,#8899aa)';
+                    deadlineHtml = `<span style="font-size:0.72rem;font-weight:700;color:${dColor};">마감 ${dText}</span>`;
+                }
+
+                const stepsHtml = steps.map(({ item, idx }, pos) => {
+                    const isDone = this.normalizeCompleted(item);
+                    const isCurrent = pos === currentStepPos;
+                    const isLast = pos === steps.length - 1;
+
+                    let iconHtml, textColor, lineColor;
+                    if (isDone) {
+                        iconHtml = `<div style="width:18px;height:18px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>`;
+                        textColor = 'var(--text-muted,#8899aa)';
+                        lineColor = '#10b981';
+                    } else if (isCurrent) {
+                        iconHtml = `<div style="width:18px;height:18px;border-radius:50%;background:#8b5cf6;box-shadow:0 0 0 4px rgba(139,92,246,0.15);flex-shrink:0;"></div>`;
+                        textColor = 'var(--text-dark,#1e2d47)';
+                        lineColor = 'var(--border-light,#dde3ee)';
+                    } else {
+                        iconHtml = `<div style="width:18px;height:18px;border-radius:50%;border:2px solid var(--border-light,#dde3ee);flex-shrink:0;"></div>`;
+                        textColor = 'var(--text-muted,#8899aa)';
+                        lineColor = 'var(--border-light,#dde3ee)';
+                    }
+
+                    // 진행중 단계만 필요 서식·저장된 업무팁을 펼쳐서 보여줌
+                    let detailHtml = '';
+                    if (isCurrent) {
+                        const formatNames = [];
+                        if (Array.isArray(item.formats)) {
+                            item.formats.forEach(f => {
+                                const name = typeof f === 'string' ? f : (f && f.name) ? f.name : null;
+                                if (name && name.trim()) formatNames.push(name.trim());
+                            });
+                        }
+                        if (Array.isArray(item.linkedDocs) && this._repoDocMetaCache) {
+                            item.linkedDocs.forEach(docId => {
+                                const meta = this._getRepoDocMeta(docId);
+                                if (meta && meta.name) formatNames.push(meta.name);
+                            });
+                        }
+                        const tipText = (item.tip && item.tip.content && item.tip.content.trim()) ? item.tip.content.trim() : '';
+
+                        if (formatNames.length > 0 || tipText) {
+                            const sectionLabelStyle = 'font-size:0.65rem;font-weight:700;color:var(--text-muted,#8899aa);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:5px;';
+                            const tipBlock = tipText ? `<div>
+                                    <div style="${sectionLabelStyle}">업무팁</div>
+                                    <div style="font-size:0.72rem;color:var(--text-dark,#1e2d47);line-height:1.55;">${renderIndentedNoteHtml(tipText)}</div>
+                                </div>` : '';
+                            const formatsBlock = formatNames.length > 0 ? `<div${tipText ? ' style="margin-top:9px;padding-top:9px;border-top:1px solid rgba(139,92,246,0.15);"' : ''}>
+                                    <div style="${sectionLabelStyle}">필요 서식·문서</div>
+                                    ${formatNames.map(n => `<div style="display:flex;align-items:flex-start;gap:6px;font-size:0.72rem;color:var(--text-dark,#1e2d47);line-height:1.5;margin-bottom:2px;"><span style="color:#8b5cf6;flex-shrink:0;margin-top:2px;font-size:0.6rem;">▸</span><span>${esc(n)}</span></div>`).join('')}
+                                </div>` : '';
+                            detailHtml = `<div style="margin-top:6px;padding:9px 11px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:8px;">
+                                ${tipBlock}${formatsBlock}
+                            </div>`;
+                        }
+                    }
+
+                    return `
+                        <div style="display:flex;gap:9px;cursor:pointer;" onclick="app.scrollToMainChecklistItem(${workflowId},${idx})">
+                            <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">
+                                ${iconHtml}
+                                ${!isLast ? `<div style="width:2px;flex:1;min-height:14px;background:${lineColor};margin-top:2px;"></div>` : ''}
+                            </div>
+                            <div style="flex:1;min-width:0;padding-bottom:${isLast ? '2px' : '14px'};">
+                                <div style="font-size:${isCurrent ? '0.82rem' : '0.79rem'};font-weight:${isCurrent ? '700' : '500'};color:${textColor};line-height:1.4;${isDone ? 'text-decoration:line-through;text-decoration-color:var(--border-light,#dde3ee);' : ''}">${esc(item.text || '')}${isCurrent ? ' <span style="font-size:0.65rem;font-weight:700;color:#8b5cf6;">▶ 진행중</span>' : ''}</div>
+                                ${detailHtml}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                container.innerHTML = `
+                    <div style="padding:16px 18px 20px;">
+                        <div style="font-size:0.66rem;font-weight:700;color:var(--text-muted,#8899aa);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">현재 업무 절차</div>
+                        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:16px;">
+                            <div style="font-size:0.92rem;font-weight:700;color:var(--text-dark,#1e2d47);line-height:1.4;">${esc(workflow.title || '(제목 없음)')}</div>
+                            ${deadlineHtml}
+                        </div>
+                        <div>${stepsHtml}</div>
+                        <div style="margin-top:2px;padding-top:12px;border-top:1px solid var(--border-light,#e8edf5);font-size:0.72rem;color:var(--text-muted,#8899aa);text-align:center;">${completed}/${total}단계 완료 · ${pct}%</div>
+                    </div>
+                `;
             }
 
             // 대화 이력 포함 AI 호출 (챗봇 전용)
@@ -18460,7 +18747,13 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
 
 
             async askAIHelp(question) {
-                if (!this.checkApiKey()) return;
+                if (!this.isAIAvailable()) {
+                    this.addAIMessage('user', question);
+                    this.addAIMessage('ai', '현재 AI 업무파트너는 사내 보안정책에 따라 비활성화되어 있습니다. 사내 AI 연동이 완료되면 자동으로 활성화됩니다.<br><br>지금은 각 체크리스트 항목의 <strong>"AI 길잡이"</strong> 버튼을 눌러 저장된 업무팁과 필요 서식을 확인해 보세요.');
+                    const aiInputEl = document.getElementById('aiInput');
+                    if (aiInputEl) aiInputEl.value = '';
+                    return;
+                }
                 if (this._aiHelpPending) return;  // 연타 방지
                 this._aiHelpPending = true;
                 const sendBtn = document.getElementById('aiSendBtn');
@@ -19002,6 +19295,7 @@ ${aiPartnerCitationFirstRules}
                     this.apiEditMode[provider] = false;
                     this.saveDataImmediate();
                     this.updateApiStatusUI(true);
+                    this.updateAIPanelAvailabilityUI();
 
                     keyInput.type = 'text';
                     keyInput.readOnly = true;
@@ -19222,6 +19516,7 @@ ${aiPartnerCitationFirstRules}
                     this.allData.apiStatus = 'disconnected';
                 }
                 this.updateApiStatusUI(this.providerConnected[this.allData.provider]);
+                this.updateAIPanelAvailabilityUI();
 
                 // 입력 필드 초기화
                 let keyInput;
@@ -20003,7 +20298,7 @@ ${aiPartnerCitationFirstRules}
                         return _docxHtmlToText(result.value || '') || null;
                     }
                     if (fn.endsWith('.pdf') && typeof pdfjsLib !== 'undefined') {
-                        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                        pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.js';
                         const arrayBuffer = await blob.arrayBuffer();
                         const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
                         let fullText = '';
@@ -23968,7 +24263,7 @@ ${aiPartnerCitationFirstRules}
                             <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;margin-left:auto;">
                                 ${branchButtons}
                                 ${deadlineBadge}
-                                ${!isSkipped ? `<button class="ai-guide-btn" onclick="event.stopPropagation();app.showChecklistHelp(${workflow.id},${index})" title="AI 길잡이"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M9 4.5a.75.75 0 01.721.544l.813 2.846a3.75 3.75 0 002.576 2.576l2.846.813a.75.75 0 010 1.442l-2.846.813a3.75 3.75 0 00-2.576 2.576l-.813 2.846a.75.75 0 01-1.442 0l-.813-2.846a3.75 3.75 0 00-2.576-2.576l-2.846-.813a.75.75 0 010-1.442l2.846-.813A3.75 3.75 0 007.466 7.89l.813-2.846A.75.75 0 019 4.5zM18 1.5a.75.75 0 01.728.568l.258 1.036c.236.94.97 1.674 1.91 1.91l1.036.258a.75.75 0 010 1.456l-1.036.258a2.25 2.25 0 00-1.91 1.91l-.258 1.036a.75.75 0 01-1.456 0l-.258-1.036a2.25 2.25 0 00-1.91-1.91l-1.036-.258a.75.75 0 010-1.456l1.036-.258a2.25 2.25 0 001.91-1.91l.258-1.036A.75.75 0 0118 1.5z" clip-rule="evenodd"/></svg><span class="ai-guide-label">AI 길잡이</span></button>` : ''}
+                                ${!isSkipped ? `<button class="ai-guide-btn" onclick="event.stopPropagation();app.showChecklistHelp(${workflow.id},${index})" title="${this.isAIAvailable() ? 'AI 길잡이' : '업무 길잡이'}"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M9 4.5a.75.75 0 01.721.544l.813 2.846a3.75 3.75 0 002.576 2.576l2.846.813a.75.75 0 010 1.442l-2.846.813a3.75 3.75 0 00-2.576 2.576l-.813 2.846a.75.75 0 01-1.442 0l-.813-2.846a3.75 3.75 0 00-2.576-2.576l-2.846-.813a.75.75 0 010-1.442l2.846-.813A3.75 3.75 0 007.466 7.89l.813-2.846A.75.75 0 019 4.5zM18 1.5a.75.75 0 01.728.568l.258 1.036c.236.94.97 1.674 1.91 1.91l1.036.258a.75.75 0 010 1.456l-1.036.258a2.25 2.25 0 00-1.91 1.91l-.258 1.036a.75.75 0 01-1.456 0l-.258-1.036a2.25 2.25 0 00-1.91-1.91l-1.036-.258a.75.75 0 010-1.456l1.036-.258a2.25 2.25 0 001.91-1.91l.258-1.036A.75.75 0 0118 1.5z" clip-rule="evenodd"/></svg><span class="ai-guide-label">${this.isAIAvailable() ? 'AI 길잡이' : '업무 길잡이'}</span></button>` : ''}
                                 ${isSkipped && item.branchActionTaken ? `<button onclick="event.stopPropagation();app.undoBranchOption(${workflow.id},${index})" style="flex-shrink:0;padding:2px 7px;font-size:0.73rem;background:transparent;color:#6b7280;border:1px solid rgba(107,114,128,0.25);border-radius:5px;cursor:pointer;font-family:inherit;">실행취소</button>` : ''}
                                 ${isCompleted && item.branchActionTaken && !isSkipped ? `<button onclick="event.stopPropagation();app.undoBranchOption(${workflow.id},${index})" style="flex-shrink:0;padding:2px 7px;font-size:0.73rem;background:transparent;color:#6b7280;border:1px solid rgba(107,114,128,0.25);border-radius:5px;cursor:pointer;font-family:inherit;">실행취소</button>` : ''}
                                 ${indicatorDots ? `<span style="display:flex;align-items:center;gap:3px;">${indicatorDots}</span>` : ''}
@@ -25455,6 +25750,7 @@ ${item.result.text}
                 
                 workflow.checklist[index].tip.content = textarea.value;
                 await this.saveDataImmediate();
+                this.refreshAIPanelDashboardIfNeeded();
                 if (textarea && !textarea.classList.contains('manual-mode')) {
                     this.autoResizeTextarea(textarea);
                 }
@@ -25536,6 +25832,7 @@ ${item.result.text}
                 if (!workflow.checklist[index].tip) workflow.checklist[index].tip = { content: '' };
                 workflow.checklist[index].tip.content = textarea.value;
                 await this.saveDataImmediate();
+                this.refreshAIPanelDashboardIfNeeded();
 
                 // 1.5초 피드백 후 뷰 모드 전환
                 if (btn) {
@@ -29142,7 +29439,7 @@ ${originalContent}`;
 
         // PDF를 텍스트로 변환
         async function pdfToText(file) {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.js';
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
             let fullText = '';
@@ -29319,7 +29616,7 @@ ${originalContent}`;
         // PDF 페이지 수 계산
         async function getPdfPageCount(file) {
             try {
-                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.js';
                 const arrayBuffer = await file.arrayBuffer();
                 const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
                 return pdf.numPages;
@@ -30814,18 +31111,114 @@ ${pdfContent.length > 100000 ? pdfContent.substring(0, 100000) + '\n\n[중략: �
             }
         }
         
+        // 줄마다 이미 "-"·"1." 같은 목록 표시가 있으면 그대로 두고, 없으면 "- "를 붙여
+        // 자동으로 불릿 목록처럼 정렬되게 함. 원래 있던 들여쓰기(공백·탭)는 하위 항목으로 보존.
+        // 업무 길잡이 모달의 helpText 렌더러, 업무 절차 패널의 업무팁 표시 둘 다에서 공용으로 사용.
+        function autoBulletizeText(text) {
+            return text.split('\n').map(line => {
+                if (!line.trim()) return '';
+                const lead = (line.match(/^([ \t]*)/) || ['', ''])[1];
+                const rest = line.slice(lead.length);
+                if (/^[•\-\*]\s+/.test(rest) || /^\d+[.)]\s+/.test(rest)) return line;
+                return `${lead}- ${rest}`;
+            }).join('\n');
+        }
+
+        // 들여쓰기 단계별로 다른 불릿 기호를 반환(1단계 ▸ · 2단계 ● · 3단계 이상 ◦)해서
+        // 하위 항목이 몇 단계까지 내려갔는지 기호만 보고도 구분되게 함.
+        function bulletMarkForLevel(level) {
+            const marks = ['▸', '●', '◦'];
+            return marks[Math.min(level, marks.length - 1)];
+        }
+
+        // autoBulletizeText로 정리한 텍스트를 들여쓰기 단계까지 반영한 HTML 목록으로 변환.
+        // (업무 절차 패널처럼 헤더·굵게 등은 필요 없고 불릿·들여쓰기만 필요한 좁은 영역용)
+        function renderIndentedNoteHtml(text) {
+            const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return autoBulletizeText(text).split('\n').map(line => {
+                if (!line.trim()) return '<div style="height:3px;"></div>';
+                const lead = (line.match(/^([ \t]*)/) || ['', ''])[1];
+                const rest = line.slice(lead.length);
+                const indentUnits = (lead.match(/\t/g) || []).length + Math.floor(lead.replace(/\t/g, '').length / 2);
+                const indentPx = Math.min(indentUnits, 4) * 14;
+                const bulletMatch = rest.match(/^[•\-\*]\s+(.*)/);
+                if (bulletMatch) {
+                    return `<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:3px;padding-left:${indentPx}px;"><span style="color:#8b5cf6;flex-shrink:0;margin-top:3px;font-size:0.6rem;">${bulletMarkForLevel(indentUnits)}</span><span>${esc(bulletMatch[1])}</span></div>`;
+                }
+                const numMatch = rest.match(/^(\d+)[.)]\s+(.*)/);
+                if (numMatch) {
+                    return `<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:3px;padding-left:${indentPx}px;"><span style="color:#8b5cf6;flex-shrink:0;font-weight:600;min-width:14px;">${numMatch[1]}.</span><span>${esc(numMatch[2])}</span></div>`;
+                }
+                return `<div style="margin-bottom:3px;padding-left:${indentPx}px;">${esc(rest)}</div>`;
+            }).join('');
+        }
+
+        // AI 연동이 없을 때 "업무 길잡이" 모달에 표시할 텍스트를 저장된 데이터만으로 구성.
+        // AI 추론(단계별 설명, 예상 소요시간 등)은 만들어내지 않고, 사용자가 직접 저장해 둔
+        // 업무팁·서식·조치결과 등 신뢰 가능한 정보만 순서대로 보여준다.
+        // 순서: 업무팁 → 서식 → 건너뛰기 항목(있을 때만) → 조치결과(있을 때만)
+        WorkflowManager.prototype._buildOfflineChecklistGuideText = function({ currentItem, hasFormats, formatNames, details, skippedItemsInfo }) {
+            const lines = [];
+            let sectionNum = 1;
+
+            // 1. 업무팁 — 자동 불릿 정렬 + 원래 들여쓰기 보존으로 하위 항목까지 한눈에 들어오게 표시
+            lines.push(`${sectionNum++}️⃣ 업무팁`);
+            const tipParts = [];
+            if (currentItem.tip?.content && currentItem.tip.content.trim()) tipParts.push(currentItem.tip.content.trim());
+            if (details?.tip && details.tip.trim()) tipParts.push(details.tip.trim());
+            if (details?.details && details.details.trim()) tipParts.push(details.details.trim());
+            if (details?.law && details.law.trim()) tipParts.push(`⚖️ 법령 정보: ${details.law.trim()}`);
+            if (details?.memo && details.memo.trim()) tipParts.push(`📌 메모: ${details.memo.trim()}`);
+            if (tipParts.length > 0) {
+                tipParts.forEach((part, i) => {
+                    autoBulletizeText(part).split('\n').forEach(l => lines.push(l));
+                    if (i < tipParts.length - 1) lines.push('');
+                });
+            } else {
+                lines.push('이 항목에 저장된 업무팁이 없습니다. 담당자 경험이나 부서 지침을 참고해 진행하세요.');
+            }
+            lines.push('');
+
+            // 2. 서식
+            lines.push(`${sectionNum++}️⃣ 서식`);
+            if (hasFormats && formatNames) {
+                formatNames.split(', ').forEach(name => lines.push(`- ${name.trim()}`));
+            } else {
+                lines.push('- 이 항목에 별도로 첨부된 서식이나 예시 문서가 없습니다. 기관에서 사용 중인 기본 양식과 부서 지침에 따라 진행하세요.');
+            }
+            lines.push('');
+
+            // 3. 건너뛰기 항목 — 있을 때만 표시
+            if (Array.isArray(skippedItemsInfo) && skippedItemsInfo.length > 0) {
+                lines.push(`${sectionNum++}️⃣ 건너뛰기 항목`);
+                skippedItemsInfo.forEach(s => {
+                    lines.push(`- ${s.text} (사유: ${s.reason || '사유 미기재'})`);
+                });
+                lines.push('');
+            }
+
+            // 4. 조치결과 — 입력되어 있을 때만 표시
+            if (currentItem.result?.text && currentItem.result.text.trim()) {
+                lines.push(`${sectionNum++}️⃣ 조치결과`);
+                autoBulletizeText(currentItem.result.text.trim()).split('\n').forEach(l => lines.push(l));
+                lines.push('');
+            }
+
+            return lines.join('\n').trim();
+        };
+
         // 다음 업무 도움말 함수 추가
         WorkflowManager.prototype.showChecklistHelp = async function(workflowId, itemIndex) {
-            if (!this.checkApiKey()) return;
-            
+            const aiAvailable = this.isAIAvailable();
+
             const workflow = this.allData.workflows.find(w => w.id === workflowId);
             // null/undefined 체크 및 itemIndex 범위 검증
             if (!workflow || !workflow.checklist || !Array.isArray(workflow.checklist)) return;
             if (typeof itemIndex !== 'number' || itemIndex < 0 || itemIndex >= workflow.checklist.length) return;
             if (!workflow.checklist[itemIndex]) return;
 
-            // 실제 모달 렌더링 전까지 진행 상태를 시각적으로 표시 (현재 할 일 안내용)
-            this.showAILoadingIndicator('current-task-guide');
+            // 실제 모달 렌더링 전까지 진행 상태를 시각적으로 표시 (현재 할 일 안내용, AI 호출 시에만 필요)
+            if (aiAvailable) this.showAILoadingIndicator('current-task-guide');
             
             let currentItem = workflow.checklist[itemIndex];
             const isCurrentCompleted = this.normalizeCompleted(currentItem);
@@ -31488,11 +31881,13 @@ ${deadlineInfo ? `- 마감일 고려: ${deadlineInfo.includes('오늘 마감') ?
             `.trim();
             
             try {
+                let helpText;
+                if (aiAvailable) {
                 const guideConfig = this.resolveAIConfig(currentItem.text, { docCount: (docContext ? 1 : 0) + (attachmentContext ? 1 : 0) });
-                let helpText = await this.callAI(prompt, { overrideModel: guideConfig.model, temperature: guideConfig.temperature, thinking: guideConfig.thinking, thinkingBudget: guideConfig.thinkingBudget });
-                
+                helpText = await this.callAI(prompt, { overrideModel: guideConfig.model, temperature: guideConfig.temperature, thinking: guideConfig.thinking, thinkingBudget: guideConfig.thinkingBudget });
+
                 // 🔥 중요: AI 응답 후처리 - 서식 정보가 있으면 강제로 포함
-                
+
                 if (hasFormats && formatNames && formatNames.trim().length > 0) {
                     
                     // 서식 섹션 생성 (프롬프트와 동일한 형식)
@@ -31562,7 +31957,12 @@ ${formatList}`;
                     
                 } else {
                 }
-                
+                } else {
+                    helpText = this._buildOfflineChecklistGuideText({
+                        currentItem, hasFormats, formatNames, details, skippedItemsInfo
+                    });
+                }
+
                 // 모달 표시
                 this.hideAILoadingIndicator();
                 // 🔥 스크롤 위치 저장 및 배경 스크롤 방지
@@ -31625,7 +32025,7 @@ ${formatList}`;
                                 <div style="display:flex;align-items:center;gap:10px;">
                                     <div style="width:3px;height:24px;background:#8b5cf6;border-radius:2px;flex-shrink:0;"></div>
                                     <div>
-                                        <div style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;color:#8b5cf6;text-transform:uppercase;margin-bottom:2px;display:flex;align-items:center;gap:4px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path fill-rule="evenodd" d="M9 4.5a.75.75 0 01.721.544l.813 2.846a3.75 3.75 0 002.576 2.576l2.846.813a.75.75 0 010 1.442l-2.846.813a3.75 3.75 0 00-2.576 2.576l-.813 2.846a.75.75 0 01-1.442 0l-.813-2.846a3.75 3.75 0 00-2.576-2.576l-2.846-.813a.75.75 0 010-1.442l2.846-.813A3.75 3.75 0 007.466 7.89l.813-2.846A.75.75 0 019 4.5zM18 1.5a.75.75 0 01.728.568l.258 1.036c.236.94.97 1.674 1.91 1.91l1.036.258a.75.75 0 010 1.456l-1.036.258a2.25 2.25 0 00-1.91 1.91l-.258 1.036a.75.75 0 01-1.456 0l-.258-1.036a2.25 2.25 0 00-1.91-1.91l-1.036-.258a.75.75 0 010-1.456l1.036-.258a2.25 2.25 0 001.91-1.91l.258-1.036A.75.75 0 0118 1.5z" clip-rule="evenodd"/></svg>AI 길잡이</div>
+                                        <div style="font-size:0.68rem;font-weight:700;letter-spacing:0.08em;color:#8b5cf6;text-transform:uppercase;margin-bottom:2px;display:flex;align-items:center;gap:4px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path fill-rule="evenodd" d="M9 4.5a.75.75 0 01.721.544l.813 2.846a3.75 3.75 0 002.576 2.576l2.846.813a.75.75 0 010 1.442l-2.846.813a3.75 3.75 0 00-2.576 2.576l-.813 2.846a.75.75 0 01-1.442 0l-.813-2.846a3.75 3.75 0 00-2.576-2.576l-2.846-.813a.75.75 0 010-1.442l2.846-.813A3.75 3.75 0 007.466 7.89l.813-2.846A.75.75 0 019 4.5zM18 1.5a.75.75 0 01.728.568l.258 1.036c.236.94.97 1.674 1.91 1.91l1.036.258a.75.75 0 010 1.456l-1.036.258a2.25 2.25 0 00-1.91 1.91l-.258 1.036a.75.75 0 01-1.456 0l-.258-1.036a2.25 2.25 0 00-1.91-1.91l-1.036-.258a.75.75 0 010-1.456l1.036-.258a2.25 2.25 0 001.91-1.91l.258-1.036A.75.75 0 0118 1.5z" clip-rule="evenodd"/></svg>${aiAvailable ? 'AI 길잡이' : '업무 길잡이 · 저장된 정보'}</div>
                                         <div style="font-size:0.98rem;font-weight:700;color:var(--text-dark,#1e2d47);letter-spacing:-0.02em;">현재 업무 단계 가이드</div>
                                     </div>
                                 </div>
@@ -31666,28 +32066,34 @@ ${formatList}`;
                                                 const t = inline(line.replace(/^\*\*|\*\*\s*$/g,''));
                                                 return `<div style="margin-top:11px;margin-bottom:4px;font-weight:700;font-size:0.88rem;letter-spacing:-0.01em;">${t}</div>`;
                                             }
-                                            // • - * 리스트
-                                            if (line.match(/^[•\-\*]\s+/)) {
-                                                const t = inline(line.replace(/^[•\-\*]\s+/, ''));
-                                                return `<div style="display:flex;align-items:flex-start;gap:7px;margin-bottom:4px;padding-left:2px;"><span style="color:#8b5cf6;flex-shrink:0;margin-top:4px;font-size:0.68rem;">▸</span><span>${t}</span></div>`;
+                                            // 들여쓰기(공백 2칸 또는 탭 1개 = 1단계)로 하위 항목 깊이 계산
+                                            const indentMatch = line.match(/^([ \t]*)/);
+                                            const indentUnits = indentMatch ? (indentMatch[1].match(/\t/g) || []).length + Math.floor((indentMatch[1].replace(/\t/g, '').length) / 2) : 0;
+                                            const indentPx = Math.min(indentUnits, 4) * 16;
+
+                                            // • - * 리스트 (선행 공백 허용 → 하위 항목 들여쓰기)
+                                            const bulletMatch = line.match(/^[ \t]*[•\-\*]\s+(.*)/);
+                                            if (bulletMatch) {
+                                                const t = inline(bulletMatch[1]);
+                                                return `<div style="display:flex;align-items:flex-start;gap:7px;margin-bottom:4px;padding-left:${2 + indentPx}px;"><span style="color:#8b5cf6;flex-shrink:0;margin-top:4px;font-size:0.68rem;">${bulletMarkForLevel(indentUnits)}</span><span>${t}</span></div>`;
                                             }
-                                            // 숫자 리스트 1. 2.
-                                            const numListMatch = line.match(/^(\d+)\.\s+(.*)/);
+                                            // 숫자 리스트 1. 2. (선행 공백 허용)
+                                            const numListMatch = line.match(/^[ \t]*(\d+)\.\s+(.*)/);
                                             if (numListMatch) {
                                                 const t = inline(numListMatch[2]);
-                                                return `<div style="display:flex;align-items:flex-start;gap:7px;margin-bottom:4px;padding-left:2px;"><span style="color:#8b5cf6;flex-shrink:0;font-weight:600;font-size:0.82rem;min-width:16px;">${numListMatch[1]}.</span><span>${t}</span></div>`;
+                                                return `<div style="display:flex;align-items:flex-start;gap:7px;margin-bottom:4px;padding-left:${2 + indentPx}px;"><span style="color:#8b5cf6;flex-shrink:0;font-weight:600;font-size:0.82rem;min-width:16px;">${numListMatch[1]}.</span><span>${t}</span></div>`;
                                             }
                                             // 빈 줄
                                             if (!line.trim()) return '<div style="height:4px;"></div>';
-                                            // 일반 텍스트
-                                            return `<div style="margin-bottom:4px;">${inline(line)}</div>`;
+                                            // 일반 텍스트 (선행 공백은 하위 항목으로 간주해 들여쓰기 적용)
+                                            return `<div style="margin-bottom:4px;padding-left:${indentPx}px;">${inline(line.replace(/^[ \t]+/, ''))}</div>`;
                                         }).join('');
                                     })()}
                                 </div>
 
                                 <!-- 참고 안내 (하단 한 줄) -->
                                 <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border-light,#e8edf5);font-size:0.73rem;color:var(--text-muted,#8899aa);line-height:1.5;">
-                                    AI 답변은 참고용입니다. 최종 확인은 원문을 직접 확인하여 진행하세요.
+                                    ${aiAvailable ? 'AI 답변은 참고용입니다. 최종 확인은 원문을 직접 확인하여 진행하세요.' : '사내 AI 연동 전까지는 저장된 업무팁·서식 정보만 표시됩니다. AI 연동이 완료되면 항목별 맞춤 가이드가 자동으로 제공됩니다.'}
                                 </div>
 
                             </div>
@@ -31735,10 +32141,10 @@ ${formatList}`;
 
                 // 배경 클릭 시 닫기 기능 제거 - X / 확인 버튼으로만 닫기 가능
                 
-                this.showToast('success', '✅', '가이드가 생성되었습니다');
+                this.showToast('success', '✅', aiAvailable ? '가이드가 생성되었습니다' : '저장된 업무 정보를 불러왔습니다');
             } catch (error) {
                 this.hideAILoadingIndicator();
-                this.showToast('error', '❌', 'AI 호출 실패: ' + error.message);
+                this.showToast('error', '❌', (aiAvailable ? 'AI 호출 실패: ' : '정보 조회 실패: ') + error.message);
             }
         };
 
