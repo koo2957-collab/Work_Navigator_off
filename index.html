@@ -9075,7 +9075,7 @@
                     .filter(w => w.type !== 'report' && !w.isDeleted && !w.isArchived && !w.completedProcessed)
                     .map(w => {
                         const progress = this.calculateProgress(w);
-                        if (progress >= 100 || !Array.isArray(w.checklist) || w.checklist.length === 0) return null;
+                        if (progress <= 0 || progress >= 100 || !Array.isArray(w.checklist) || w.checklist.length === 0) return null;
 
                         const currentItem = w.checklist.find(item =>
                             !(this.isSubItem(item.text) || (item.indent || 0) > 0) &&
