@@ -2428,6 +2428,19 @@
             opacity: 0.62;
             background: #f9fafb;
         }
+        /* 건너뛴 항목 접이식 그룹 (포커스 모드) */
+        .skip-group { margin-bottom: 8px; }
+        .skip-group-toggle {
+            width: 100%; display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 12px; background: #f1f5f9; border: 1px solid var(--border-light); border-radius: 8px;
+            color: #64748b; font-size: 0.82rem; font-weight: 600; cursor: pointer; font-family: inherit;
+            transition: background 0.15s;
+        }
+        .skip-group-toggle:hover { background: #e7ecf2; }
+        .skip-group-arrow { font-size: 0.75rem; transition: transform 0.15s; display: inline-block; }
+        .skip-group-items { padding-top: 6px; }
+        :root.dark-mode .skip-group-toggle { background: rgba(255,255,255,0.05); border-color: var(--border-light); color: var(--text-muted); }
+        :root.dark-mode .skip-group-toggle:hover { background: rgba(255,255,255,0.09); }
         .checklist-card.sub-item {
             margin-left: 22px;
             border-left-color: #93c5fd;
@@ -4712,8 +4725,7 @@
                     <div style="display:flex;flex-direction:column;gap:5px;">
                         <div style="display:flex;flex-wrap:wrap;gap:4px 14px;">
                             <span style="font-size:0.72rem;color:var(--text-gray);display:flex;align-items:center;gap:3px;"><kbd style="background:var(--white);border:1px solid var(--border-light);border-radius:3px;padding:1px 5px;font-size:0.67rem;font-family:inherit;color:var(--text-dark);">Enter</kbd>다음 항목 추가</span>
-                            <span style="font-size:0.72rem;color:var(--text-gray);display:flex;align-items:center;gap:3px;"><kbd style="background:var(--white);border:1px solid var(--border-light);border-radius:3px;padding:1px 5px;font-size:0.67rem;font-family:inherit;color:var(--text-dark);">Tab</kbd>하위 항목으로</span>
-                            <span style="font-size:0.72rem;color:var(--text-gray);display:flex;align-items:center;gap:3px;"><kbd style="background:var(--white);border:1px solid var(--border-light);border-radius:3px;padding:1px 5px;font-size:0.67rem;font-family:inherit;color:var(--text-dark);">Shift+Tab</kbd>상위 항목으로</span>
+                            <span style="font-size:0.72rem;color:var(--text-gray);display:flex;align-items:center;gap:3px;"><kbd style="background:var(--white);border:1px solid var(--border-light);border-radius:3px;padding:1px 5px;font-size:0.67rem;font-family:inherit;color:var(--text-dark);">Tab</kbd>상위/하위 전환</span>
                             <span style="font-size:0.72rem;color:var(--text-gray);display:flex;align-items:center;gap:3px;"><kbd style="background:var(--white);border:1px solid var(--border-light);border-radius:3px;padding:1px 5px;font-size:0.67rem;font-family:inherit;color:var(--text-dark);">⠿ 드래그</kbd>순서 변경</span>
                             <span style="font-size:0.72rem;color:var(--text-gray);display:flex;align-items:center;gap:3px;"><kbd style="background:var(--white);border:1px solid var(--border-light);border-radius:3px;padding:1px 5px;font-size:0.67rem;font-family:inherit;color:var(--text-dark);">Ctrl+Enter</kbd>저장</span>
                         </div>
@@ -8101,8 +8113,7 @@
                             <span style="font-size:0.78rem;font-weight:700;color:var(--accent);flex-shrink:0;">편집 모드</span>
                             <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                                 <span style="font-size:0.72rem;color:var(--text-gray);display:flex;align-items:center;gap:3px;"><kbd style="background:var(--white);border:1px solid var(--border-light);border-radius:3px;padding:1px 5px;font-size:0.67rem;font-family:inherit;color:var(--text-dark);">Enter</kbd>아래 추가</span>
-                                <span style="font-size:0.72rem;color:var(--text-gray);display:flex;align-items:center;gap:3px;"><kbd style="background:var(--white);border:1px solid var(--border-light);border-radius:3px;padding:1px 5px;font-size:0.67rem;font-family:inherit;color:var(--text-dark);">Tab</kbd>하위</span>
-                                <span style="font-size:0.72rem;color:var(--text-gray);display:flex;align-items:center;gap:3px;"><kbd style="background:var(--white);border:1px solid var(--border-light);border-radius:3px;padding:1px 5px;font-size:0.67rem;font-family:inherit;color:var(--text-dark);">Shift+Tab</kbd>상위 복귀</span>
+                                <span style="font-size:0.72rem;color:var(--text-gray);display:flex;align-items:center;gap:3px;"><kbd style="background:var(--white);border:1px solid var(--border-light);border-radius:3px;padding:1px 5px;font-size:0.67rem;font-family:inherit;color:var(--text-dark);">Tab</kbd>상위/하위 전환</span>
                                 <span style="font-size:0.72rem;color:var(--text-gray);display:flex;align-items:center;gap:3px;"><kbd style="background:var(--white);border:1px solid var(--border-light);border-radius:3px;padding:1px 5px;font-size:0.67rem;font-family:inherit;color:var(--text-dark);">Bksp</kbd>빈칸에서 항목 삭제</span>
                                 <span style="font-size:0.72rem;color:var(--text-gray);display:flex;align-items:center;gap:3px;"><kbd style="background:var(--white);border:1px solid var(--border-light);border-radius:3px;padding:1px 5px;font-size:0.67rem;font-family:inherit;color:var(--text-dark);">⠿</kbd>순서 변경</span>
                             </span>
@@ -8112,7 +8123,7 @@
                             ${isEditMode
                                 ? cl.map((item, index) => this.renderFocusChecklistItem(workflow, item, index)).join('') +
                                   `<button class="fci-add-btn" onclick="app.focusAddItem(${workflow.id})">＋ 항목 추가</button>`
-                                : cl.map((item, index) => this.renderChecklistItem(workflow, item, index)).join('')
+                                : this.renderChecklistItemsGrouped(workflow, cl)
                             }
                         </div>
                     </div>
@@ -8170,12 +8181,12 @@
                             ${isPackage ? `<button class="fap-btn fap-btn-primary" onclick="app.duplicateWorkflow(${workflow.id})">복사하여 시작</button>` : ''}
                             ${isPackage ? `<button class="fap-btn" style="color:var(--text-muted);font-size:0.82rem;" onclick="app.archiveTemplate(${workflow.id})">보관함으로 이동</button>` : ''}
                             ${!isPackage && isCompleted && !workflow.completedProcessed ? `<button class="fap-btn fap-btn-done" onclick="app.markWorkflowDone(${workflow.id})">✅ 완료 처리</button>` : ''}
+                            ${!isPackage && workflow.isReference && !workflow.completedProcessed ? `<button class="fap-btn fap-btn-primary" onclick="app.duplicateWorkflow(${workflow.id})">복사하여 시작</button>` : ''}
                             ${!isPackage && workflow.completedProcessed ? `
                                 <div style="font-size:0.78rem;color:#10b981;font-weight:700;text-align:center;padding:4px 0;">✅ 완료 처리됨</div>
-                                <button class="fap-btn fap-btn-primary" onclick="app.recycleWorkflow(${workflow.id})">♻️ 재활용</button>
+                                <button class="fap-btn fap-btn-primary" onclick="app.saveAsReference(${workflow.id})">📚 레퍼런스로 저장</button>
                                 <button class="fap-btn" style="font-size:0.81rem;color:var(--text-muted);" onclick="app.undoMarkWorkflowDone(${workflow.id})">↩ 완료 취소</button>
                             ` : ''}
-                            ${!isPackage && !isCompleted && !workflow.completedProcessed ? `<button class="fap-btn fap-btn-primary" onclick="app.duplicateWorkflow(${workflow.id})">복사하여 시작</button>` : ''}
                             ${!isPackage ? `<button class="fap-btn fap-btn-danger" onclick="app.deleteWorkflow(${workflow.id})">삭제</button>` : ''}
                         `;
                     }
@@ -9787,8 +9798,9 @@
                 if (!workflow || !workflow.checklist[index]) return;
                 const item = workflow.checklist[index];
                 const cur = item.indent || 0;
-                if (!shiftKey && cur < 1) item.indent = 1;
-                else if (shiftKey && cur > 0) item.indent = 0;
+                // 들여쓰기는 상위/하위 2단계뿐이라 Tab만으로 토글, Shift+Tab은 예전처럼 "무조건 상위로"
+                if (!shiftKey) item.indent = cur < 1 ? 1 : 0;
+                else if (cur > 0) item.indent = 0;
                 else return;
                 this.hasUnsavedChanges = true;
                 this.saveData();
@@ -9820,8 +9832,7 @@
                         cl.map((item, idx) => this.renderFocusChecklistItem(workflow, item, idx)).join('') +
                         `<button class="fci-add-btn" onclick="app.focusAddItem(${workflow.id})">＋ 항목 추가</button>`;
                 } else {
-                    container.innerHTML =
-                        cl.map((item, idx) => this.renderChecklistItem(workflow, item, idx)).join('');
+                    container.innerHTML = this.renderChecklistItemsGrouped(workflow, cl);
                     // 진행률 바 업데이트
                     const bar = document.getElementById(`checklist-bar-${workflow.id}`);
                     if (bar) bar.style.width = progress + '%';
@@ -10949,8 +10960,9 @@ ${writtenSection}${docSection}
                     event.preventDefault();
                     const div = input.closest('.checklist-edit-item');
                     const cur = parseInt(div?.dataset.indent || 0);
-                    if (!event.shiftKey && cur < 1) this._setItemIndent(div, 1, containerId);
-                    else if (event.shiftKey && cur > 0) this._setItemIndent(div, 0, containerId);
+                    // 들여쓰기는 상위/하위 2단계뿐이라 Tab만으로 토글, Shift+Tab은 예전처럼 "무조건 상위로"
+                    if (!event.shiftKey) this._setItemIndent(div, cur < 1 ? 1 : 0, containerId);
+                    else if (cur > 0) this._setItemIndent(div, 0, containerId);
                 } else if (event.key === 'Backspace' && input.value === '') {
                     event.preventDefault();
                     const idx = parseInt(input.getAttribute('data-index'));
@@ -12797,12 +12809,17 @@ ${GOVERNMENT_DOCUMENT_GUIDELINES}
                 this.showToast('success', '↩', '진행중으로 복귀했습니다.');
             }
 
-            // 완료된 업무를 재사용 업무로 등록
-            recycleWorkflow(id) {
+            // 완료된 업무를 레퍼런스로 등록하고, 이어서 업무관리 폴더에 바로 파일링할 수 있도록 폴더 선택창을 연다.
+            // "템플릿으로 저장"과 달리 체크리스트를 초기화하지 않아 실제 조치결과·첨부파일 등 검증된 내용이 그대로 남는다.
+            saveAsReference(id) {
                 const workflow = this.allData.workflows.find(w => w.id === id);
                 if (!workflow) return;
-                this.saveAsTemplate(id);
-                this.showToast('success', '♻️', `"${workflow.title}" 재사용 업무로 등록되었습니다.`);
+                if (!workflow.isReference) {
+                    workflow.isReference = true;
+                    this.saveData();
+                    this.showToast('success', '📚', `"${workflow.title}" 레퍼런스로 등록되었습니다.`);
+                }
+                this.moveWorkflowToFolder(id);
             }
 
             // 완료된 업무 섹션 접기/펼치기
@@ -24608,6 +24625,50 @@ ${aiPartnerCitationFirstRules}
                 </div>`;
             }
 
+            // 포커스 모드 체크리스트: 건너뛴 항목이 개별 카드로 늘어서 지저분해 보이지 않도록
+            // 전부 하나의 접이식 그룹으로 묶어서 표시 (기본은 접힘, 첫 건너뛴 항목 위치에 삽입)
+            renderChecklistItemsGrouped(workflow, cl) {
+                const skippedEntries = [];
+                cl.forEach((item, idx) => { if (item.skipped === true) skippedEntries.push({ item, idx }); });
+
+                if (skippedEntries.length === 0) {
+                    return cl.map((item, idx) => this.renderChecklistItem(workflow, item, idx)).join('');
+                }
+
+                const expanded = !!(this._skippedGroupExpanded && this._skippedGroupExpanded[workflow.id]);
+                const groupItemsHtml = skippedEntries.map(({ item, idx }) => this.renderChecklistItem(workflow, item, idx)).join('');
+                const groupHtml = `
+                    <div class="skip-group">
+                        <button class="skip-group-toggle" onclick="app.toggleSkippedGroup(${workflow.id})">
+                            <span style="display:flex;align-items:center;gap:6px;">
+                                <span style="font-size:0.9rem;">🔀</span>
+                                <span>건너뛴 항목 ${skippedEntries.length}개</span>
+                            </span>
+                            <span class="skip-group-arrow" style="transform:rotate(${expanded ? '180deg' : '0deg'});">▾</span>
+                        </button>
+                        <div class="skip-group-items" style="display:${expanded ? 'block' : 'none'};">${groupItemsHtml}</div>
+                    </div>`;
+
+                let html = '';
+                let groupInserted = false;
+                cl.forEach((item, idx) => {
+                    if (item.skipped === true) {
+                        if (!groupInserted) { html += groupHtml; groupInserted = true; }
+                    } else {
+                        html += this.renderChecklistItem(workflow, item, idx);
+                    }
+                });
+                return html;
+            }
+
+            // 건너뛴 항목 그룹 펼치기/접기
+            toggleSkippedGroup(workflowId) {
+                if (!this._skippedGroupExpanded) this._skippedGroupExpanded = {};
+                this._skippedGroupExpanded[workflowId] = !this._skippedGroupExpanded[workflowId];
+                const workflow = this.allData.workflows.find(w => w.id === workflowId);
+                if (workflow) this.refreshFocusChecklist(workflow);
+            }
+
             // 체크리스트 항목 렌더링 (고급 카드 형태 - 수정 모달 스타일)
             renderChecklistItem(workflow, item, index) {
                 // 데이터 구조 초기화
@@ -24920,9 +24981,11 @@ ${aiPartnerCitationFirstRules}
                 // 체크리스트 상세 모달 닫기
                 this.closeChecklistItemModal();
 
-                // UI 업데이트 - 분기 버튼을 누른 카드 인덱스 전달
-                // 상세뷰 또는 포커스모드 모두 인플레이스 갱신
-                if (this.selectedWorkflowId === workflowId || this.focusedWorkflowId === workflowId) {
+                // UI 업데이트 - 포커스 모드는 건너뛴 항목 그룹 접기가 반영되도록 전체 재구성,
+                // 구버전 상세뷰는 기존처럼 카드 단위로 가볍게 갱신
+                if (this.focusMode && this.focusedWorkflowId === workflowId) {
+                    this.refreshFocusChecklist(workflow);
+                } else if (this.selectedWorkflowId === workflowId) {
                     this.refreshChecklistInPlace(workflowId, index);
                 } else {
                     this.displayWorkflows();
