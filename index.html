@@ -10069,8 +10069,8 @@
                            ondragstart="event.preventDefault()"
                            onfocus="this.style.background='rgba(37,99,235,0.05)';this.style.outline='1.5px solid rgba(37,99,235,0.3)'"
                            onblur="this.style.background='transparent';this.style.outline='none';app.saveFocusItemText(${workflow.id},${index},this.value)"
-                           onkeydown="if(event.key==='Enter'){event.preventDefault();app.focusAddItemAfterLive(${workflow.id},${index});}
-                                      if(event.key==='Tab'){event.preventDefault();app.focusToggleItemIndent(${workflow.id},${index},event.shiftKey);}
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();app.saveFocusItemText(${workflow.id},${index},this.value);app.focusAddItemAfterLive(${workflow.id},${index});}
+                                      if(event.key==='Tab'){event.preventDefault();app.saveFocusItemText(${workflow.id},${index},this.value);app.focusToggleItemIndent(${workflow.id},${index},event.shiftKey);}
                                       if(event.key==='Backspace'&&!this.value.trim()){event.preventDefault();app.focusDeleteItemLive(${workflow.id},${index});}"
                            placeholder="항목명 입력...">`;
 
@@ -25257,7 +25257,10 @@ ${aiPartnerCitationFirstRules}
             escapeHtml(text) {
                 const div = document.createElement('div');
                 div.textContent = text;
-                return div.innerHTML;
+                // innerHTML은 텍스트 콘텐츠 직렬화 규칙상 큰따옴표(")는 이스케이프하지 않는다.
+                // 이 함수 결과가 value="${...}" 처럼 큰따옴표 속성값 안에 그대로 삽입되는 곳이 많아,
+                // "가 포함된 입력값(체크리스트 항목 등)이 속성을 조기 종료시켜 뒷부분이 사라지는 버그가 있었다.
+                return div.innerHTML.replace(/"/g, '&quot;');
             }
 
             // onclick="...('${str}')" 형태로 HTML 속성에 삽입되는 JS 문자열 리터럴 이스케이프.
