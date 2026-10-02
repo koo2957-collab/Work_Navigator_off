@@ -4670,6 +4670,30 @@
                                     </div>
                                 </div>
                                 <div class="ai-model-divider"></div>
+                                <div class="ai-model-opt" data-mode="manual" data-model="gemini-3.8-flash" onclick="app.setModelMode('manual','gemini-3.8-flash')">
+                                    <div class="ai-model-opt-body">
+                                        <div class="ai-model-opt-name">Gemini 3.8 Flash <span class="ai-model-tag ai-model-tag-blue">Thinking</span></div>
+                                        <div class="ai-model-opt-desc">최신 플래그십 · 20회/일 무료</div>
+                                    </div>
+                                </div>
+                                <div class="ai-model-opt" data-mode="manual" data-model="gemini-3.7-flash" onclick="app.setModelMode('manual','gemini-3.7-flash')">
+                                    <div class="ai-model-opt-body">
+                                        <div class="ai-model-opt-name">Gemini 3.7 Flash <span class="ai-model-tag ai-model-tag-blue">Thinking</span></div>
+                                        <div class="ai-model-opt-desc">고성능 추론 · 20회/일 무료</div>
+                                    </div>
+                                </div>
+                                <div class="ai-model-opt" data-mode="manual" data-model="gemini-3.6-flash" onclick="app.setModelMode('manual','gemini-3.6-flash')">
+                                    <div class="ai-model-opt-body">
+                                        <div class="ai-model-opt-name">Gemini 3.6 Flash <span class="ai-model-tag ai-model-tag-blue">Thinking</span></div>
+                                        <div class="ai-model-opt-desc">고성능 추론 · 20회/일 무료</div>
+                                    </div>
+                                </div>
+                                <div class="ai-model-opt" data-mode="manual" data-model="gemini-3.5-flash-lite" onclick="app.setModelMode('manual','gemini-3.5-flash-lite')">
+                                    <div class="ai-model-opt-body">
+                                        <div class="ai-model-opt-name">Gemini 3.5 Flash Lite <span class="ai-model-tag ai-model-tag-green">500회/일</span></div>
+                                        <div class="ai-model-opt-desc">최신 경량 고속 · 무료</div>
+                                    </div>
+                                </div>
                                 <div class="ai-model-opt" data-mode="manual" data-model="gemini-3.1-flash-lite" onclick="app.setModelMode('manual','gemini-3.1-flash-lite')">
                                     <div class="ai-model-opt-body">
                                         <div class="ai-model-opt-name">Gemini 3.1 Flash Lite <span class="ai-model-tag ai-model-tag-green">500회/일</span></div>
@@ -4679,7 +4703,7 @@
                                 <div class="ai-model-opt" data-mode="manual" data-model="gemini-3.5-flash" onclick="app.setModelMode('manual','gemini-3.5-flash')">
                                     <div class="ai-model-opt-body">
                                         <div class="ai-model-opt-name">Gemini 3.5 Flash <span class="ai-model-tag ai-model-tag-blue">Thinking</span></div>
-                                        <div class="ai-model-opt-desc">최신 플래그십 · 20회/일 무료</div>
+                                        <div class="ai-model-opt-desc">플래그십 · 20회/일 무료</div>
                                     </div>
                                 </div>
                                 <div class="ai-model-opt" data-mode="manual" data-model="gemini-2.5-flash" onclick="app.setModelMode('manual','gemini-2.5-flash')">
@@ -6552,7 +6576,7 @@
             constructor() {
                 this.STORAGE_KEY = 'workflowData_v5.1';
                 this.API_KEY_STORAGE = 'apiKeys_v5.1';
-                this.allData = { workflows: [], templates: [], folders: [], provider: 'gemini', geminiApiKey: '', chatgptApiKey: '', claudeApiKey: '', lawApiKey: '', selectedModel: { gemini: 'gemini-3.1-flash-lite', chatgpt: 'gpt-4o-mini', claude: 'claude-3-5-haiku-20241022' }, modelMode: 'auto', manualModel: 'gemini-3.1-flash-lite', apiStatus: 'disconnected' };
+                this.allData = { workflows: [], templates: [], folders: [], provider: 'gemini', geminiApiKey: '', chatgptApiKey: '', claudeApiKey: '', lawApiKey: '', selectedModel: { gemini: 'gemini-3.5-flash-lite', chatgpt: 'gpt-4o-mini', claude: 'claude-3-5-haiku-20241022' }, modelMode: 'auto', manualModel: 'gemini-3.5-flash-lite', apiStatus: 'disconnected' };
                 // API 키 테스트용 임시 상태 (실제 저장 전까지 보관)
                 this.pendingApiKeys = { gemini: null, chatgpt: null, claude: null };
                 this.lastApiTestSuccess = { gemini: false, chatgpt: false, claude: false };
@@ -6810,7 +6834,7 @@
                     chatgptApiKey: '',
                     claudeApiKey: '',
                     selectedModel: {
-                        gemini: 'gemini-3.1-flash-lite',
+                        gemini: 'gemini-3.5-flash-lite',
                         chatgpt: 'gpt-4o-mini',
                         claude: 'claude-3-5-haiku-20241022'
                     },
@@ -19824,7 +19848,7 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
                         } else if (typeof options.temperature === 'number') {
                             genConfig = { temperature: options.temperature, topP: 0.9 };
                         }
-                        // 폴백 체인: 3.5 Flash 실패 시 2.5 Flash → 3.1 Lite 자동 전환
+                        // 폴백 체인: 시작 모델 실패 시 하위 Flash → Lite 순으로 자동 전환
                         const chain = this._buildFallbackChain(model, genConfig);
                         result = await this._tryGeminiChain(null, key, chain, contents);
                     } else if (provider === 'chatgpt') {
@@ -19937,6 +19961,9 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
             _getAutoThinkingChain() {
                 // Thinking 지원 모델 (최신순, Gemma/Pro 제외)
                 return [
+                    { model: 'gemini-3.8-flash',      rpd: 20,  label: 'Gemini 3.8 Flash',   icon: '⭐' },
+                    { model: 'gemini-3.7-flash',      rpd: 20,  label: 'Gemini 3.7 Flash',   icon: '⭐' },
+                    { model: 'gemini-3.6-flash',      rpd: 20,  label: 'Gemini 3.6 Flash',   icon: '⭐' },
                     { model: 'gemini-3.5-flash',      rpd: 20,  label: 'Gemini 3.5 Flash',   icon: '⭐' },
                     { model: 'gemini-3-flash-preview', rpd: 20,  label: 'Gemini 3 Flash',     icon: '⚡' },
                     { model: 'gemini-2.5-flash',       rpd: 20,  label: 'Gemini 2.5 Flash',   icon: '💡' },
@@ -19946,6 +19973,7 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
             _getAutoLiteChain() {
                 // 경량 모델 (Gemma/Pro 제외)
                 return [
+                    { model: 'gemini-3.5-flash-lite',  rpd: 500, label: 'Gemini 3.5 Lite',    icon: '🚀' },
                     { model: 'gemini-3.1-flash-lite',  rpd: 500, label: 'Gemini 3.1 Lite',    icon: '🚀' },
                     { model: 'gemini-2.5-flash-lite',  rpd: 20,  label: 'Gemini 2.5 Lite',    icon: '🔹' },
                 ];
@@ -19969,14 +19997,14 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
                 }
                 const mode = this.allData.modelMode || 'auto';
                 if (mode === 'manual') {
-                    return { model: this.allData.manualModel || 'gemini-3.1-flash-lite', thinking: false, temperature: 0.1 };
+                    return { model: this.allData.manualModel || 'gemini-3.5-flash-lite', thinking: false, temperature: 0.1 };
                 }
 
                 // ── 자동 모드: 전체 모델 체인으로 스마트 선택 ──────────────
                 const complexity = this.detectQueryComplexity(questionText, context);
 
                 if (complexity !== 'simple') {
-                    // Thinking 체인: 3.5 Flash → 3 Flash → 2.5 Flash (총 60회/일)
+                    // Thinking 체인: 3.8 → 3.7 → 3.6 → 3.5 → 3 → 2.5 Flash (총 120회/일)
                     const thinkingChain = this._getAutoThinkingChain();
                     const picked = this._pickFromChain(thinkingChain);
                     if (picked) {
@@ -19984,18 +20012,18 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
                         return { model: picked.model, thinking: true, thinkingBudget: budget, temperature: 0.1 };
                     }
                     // 모든 Thinking 모델 소진 → Lite로 폴백
-                    this.showToast('info', '⚠️', '오늘 Thinking 한도(60회) 소진 → 일반 모드로 전환');
+                    this.showToast('info', '⚠️', '오늘 Thinking 한도(120회) 소진 → 일반 모드로 전환');
                 }
 
-                // Lite 체인: 3.1 Lite → 2.5 Lite (총 520회/일)
+                // Lite 체인: 3.5 Lite → 3.1 Lite → 2.5 Lite (총 1,020회/일)
                 const liteChain = this._getAutoLiteChain();
                 const litePicked = this._pickFromChain(liteChain);
                 if (litePicked) {
                     return { model: litePicked.model, thinking: false, temperature: 0.1 };
                 }
 
-                // 전체 소진 시 안전망 (3.1 Lite 기본 반환)
-                return { model: 'gemini-3.1-flash-lite', thinking: false, temperature: 0.1 };
+                // 전체 소진 시 안전망 (3.5 Lite 기본 반환)
+                return { model: 'gemini-3.5-flash-lite', thinking: false, temperature: 0.1 };
             }
 
             // ── 자동 폴백 체인 ─────────────────────────────────────────────
@@ -20008,8 +20036,8 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
                 if (configLite) delete configLite.thinkingConfig;
                 const cleanLite = configLite && Object.keys(configLite).length ? configLite : null;
 
-                const thinkingModels = ['gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-2.5-flash'];
-                const liteModels     = ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite'];
+                const thinkingModels = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-2.5-flash'];
+                const liteModels     = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite'];
 
                 if (hasThinking && thinkingModels.includes(model)) {
                     // 이 모델부터 Thinking 체인 → Lite 체인 순으로 구성
@@ -20039,9 +20067,13 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
             _modelLabel(model) {
                 const map = {
                     // Gemini
+                    'gemini-3.8-flash':           'Gemini 3.8 Flash',
+                    'gemini-3.7-flash':           'Gemini 3.7 Flash',
+                    'gemini-3.6-flash':           'Gemini 3.6 Flash',
                     'gemini-3.5-flash':           'Gemini 3.5 Flash',
                     'gemini-3-flash-preview':      'Gemini 3 Flash',
                     'gemini-2.5-flash':            'Gemini 2.5 Flash',
+                    'gemini-3.5-flash-lite':       'Gemini 3.5 Lite',
                     'gemini-3.1-flash-lite':       'Gemini 3.1 Lite',
                     'gemini-2.5-flash-lite':       'Gemini 2.5 Lite',
                     'gemini-3.1-pro-preview':      'Gemini 3.1 Pro',
@@ -20136,7 +20168,7 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
 
             updateModelSelectorUI() {
                 const mode  = this.allData.modelMode || 'auto';
-                const model = this.allData.manualModel || 'gemini-3.1-flash-lite';
+                const model = this.allData.manualModel || 'gemini-3.5-flash-lite';
                 const pill  = document.getElementById('aiModelPill');
                 const label = document.getElementById('aiModelPillLabel');
                 if (!pill) return;
@@ -20172,13 +20204,13 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
             }
 
             _selectGeminiModel(taskComplexity = 'full') {
-                const userModel = this.allData.selectedModel?.gemini || 'gemini-3.1-flash-lite';
+                const userModel = this.allData.selectedModel?.gemini || 'gemini-3.5-flash-lite';
                 // 이미 lite 계열이거나 Gemma 모델이면 그대로 사용
                 if (userModel.includes('lite') || userModel.startsWith('gemma-')) return userModel;
                 // lite 작업: 상위 모델을 할당량이 많은 lite 모델로 자동 전환
                 if (taskComplexity === 'lite') {
                     if (userModel === 'gemini-2.5-flash') return 'gemini-2.5-flash-lite';
-                    if (userModel === 'gemini-3.5-flash' || userModel === 'gemini-3-flash-preview') return 'gemini-3.1-flash-lite';
+                    if (['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3-flash-preview'].includes(userModel)) return 'gemini-3.5-flash-lite';
                 }
                 return userModel;
             }
@@ -20617,7 +20649,7 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
                                 const selectedDocs = docsWithScore.map(item => item.doc);
                                 
                                 const provider = this.allData.provider || 'gemini';
-                                const model = this.allData.selectedModel?.[provider] || 'gemini-3.1-flash-lite';
+                                const model = this.allData.selectedModel?.[provider] || 'gemini-3.5-flash-lite';
                                 let apiKey;
                 if (provider === 'gemini') {
                     apiKey = this.allData.geminiApiKey;
@@ -20693,7 +20725,7 @@ ${docScope === 'internal' ? `[내부결재 — 보고·검토·승인용]
                                 
                                 // API 키 정보 가져오기 (PDF 문서 처리 부분과 동일)
                                 const attachmentProvider = this.allData.provider || 'gemini';
-                                const attachmentModel = this.allData.selectedModel?.[attachmentProvider] || 'gemini-3.1-flash-lite';
+                                const attachmentModel = this.allData.selectedModel?.[attachmentProvider] || 'gemini-3.5-flash-lite';
                                 let attachmentApiKey = '';
                                 if (attachmentProvider === 'gemini') {
                                     attachmentApiKey = this.allData.geminiApiKey;
@@ -20885,9 +20917,9 @@ ${aiPartnerCitationFirstRules}
                         // 완료 후 모델 레이블 업데이트
                         if (streamEl) {
                             const labelEl = streamEl.closest('.chat-message')?.querySelector('.message-label');
-                            const shortNames = { 'gemini-3.5-flash':'3.5 Flash','gemini-2.5-flash':'2.5 Flash','gemini-3.1-flash-lite':'3.1 Lite' };
-                            if (labelEl && this._lastUsedModel && shortNames[this._lastUsedModel]) {
-                                labelEl.innerHTML = `AI 업무파트너<span style="font-size:0.63rem;font-weight:400;opacity:0.55;margin-left:5px;">· ${shortNames[this._lastUsedModel]}</span>`;
+                            if (labelEl && this._lastUsedModel) {
+                                const shortName = this._modelLabel(this._lastUsedModel).replace(/^Gemini /, '');
+                                labelEl.innerHTML = `AI 업무파트너<span style="font-size:0.63rem;font-weight:400;opacity:0.55;margin-left:5px;">· ${shortName}</span>`;
                             }
                         }
                         const estimatedTokens = Math.ceil((finalQuestion.length + (answer||'').length) / 2);
@@ -20991,10 +21023,15 @@ ${aiPartnerCitationFirstRules}
                 if (!chatBox) return;
 
                 const shortNames = {
+                    'gemini-3.8-flash':      '3.8 Flash',
+                    'gemini-3.7-flash':      '3.7 Flash',
+                    'gemini-3.6-flash':      '3.6 Flash',
                     'gemini-3.5-flash':      '3.5 Flash',
                     'gemini-2.5-flash':      '2.5 Flash',
+                    'gemini-3.5-flash-lite': '3.5 Lite',
                     'gemini-3.1-flash-lite': '3.1 Lite',
                     'gemini-3-flash-preview':'3 Flash',
+                    'gemini-2.5-flash-lite': '2.5 Lite',
                     'gemma-4-31b-it':        'Gemma 31B',
                     'gemma-4-26b-a4b-it':    'Gemma 26B',
                     'gemini-3.1-pro-preview':'3.1 Pro',
@@ -28421,7 +28458,7 @@ ${originalContent}`;
                                 if (apiKey) {
                                     try {
                                         doc.summary = await summarizePdfWithAI(doc.content, apiKey, provider,
-                                            this.allData.selectedModel?.[provider] || 'gemini-3.1-flash-lite');
+                                            this.allData.selectedModel?.[provider] || 'gemini-3.5-flash-lite');
                                     } catch (e) { console.error('요약 생성 실패:', e); }
                                 }
                                 await saveProjectDoc(workflowId, doc);
@@ -28717,7 +28754,7 @@ ${originalContent}`;
                                 if (apiKey) {
                                     try {
                                         doc.summary = await summarizePdfWithAI(doc.content, apiKey, provider,
-                                            this.allData.selectedModel?.[provider] || 'gemini-3.1-flash-lite');
+                                            this.allData.selectedModel?.[provider] || 'gemini-3.5-flash-lite');
                                     } catch (e) { console.error('요약 생성 실패:', e); }
                                 }
                                 await saveProjectDoc(workflowId, doc);
@@ -29015,7 +29052,7 @@ ${originalContent}`;
 
                 // PDF 문서 참조 추가 (요약 사용)
                 const provider = this.allData.provider || 'gemini';
-                const model = this.allData.selectedModel?.[provider] || 'gemini-3.1-flash-lite';
+                const model = this.allData.selectedModel?.[provider] || 'gemini-3.5-flash-lite';
                 let apiKey;
                 if (provider === 'gemini') {
                     apiKey = this.allData.geminiApiKey;
@@ -29421,7 +29458,7 @@ ${originalContent}`;
                     lastReset: new Date().toISOString(),
                     lastResetTime: Date.now(),
                     callHistory: [],
-                    modelCalls: {}  // { 'gemini-3.5-flash': 5, 'gemini-3.1-flash-lite': 15, ... }
+                    modelCalls: {}  // { 'gemini-3.8-flash': 5, 'gemini-3.5-flash-lite': 15, ... }
                 };
             }
 
@@ -29519,7 +29556,11 @@ ${originalContent}`;
             // 모델별 제한 정보
             getModelLimits(model) {
                 const limits = {
+                    'gemini-3.8-flash': { rpm: 5, tpm: 250000, rpd: 20 },
+                    'gemini-3.7-flash': { rpm: 5, tpm: 250000, rpd: 20 },
+                    'gemini-3.6-flash': { rpm: 5, tpm: 250000, rpd: 20 },
                     'gemini-3.5-flash': { rpm: 5, tpm: 250000, rpd: 20 },
+                    'gemini-3.5-flash-lite': { rpm: 15, tpm: 250000, rpd: 500 },
                     'gemini-3.1-flash-lite': { rpm: 15, tpm: 250000, rpd: 500 },
                     'gemma-4-31b-it': { rpm: 15, tpm: -1, rpd: 1500 },
                     'gemma-4-26b-a4b-it': { rpm: 15, tpm: -1, rpd: 1500 },
@@ -29623,11 +29664,15 @@ ${originalContent}`;
                 let chainSection = '';
                 if (provider === 'gemini') {
                     const thinkingChain = [
+                        { id:'gemini-3.8-flash', name:'3.8 Flash', rpd:20 },
+                        { id:'gemini-3.7-flash', name:'3.7 Flash', rpd:20 },
+                        { id:'gemini-3.6-flash', name:'3.6 Flash', rpd:20 },
                         { id:'gemini-3.5-flash', name:'3.5 Flash', rpd:20 },
                         { id:'gemini-3-flash-preview', name:'3 Flash', rpd:20 },
                         { id:'gemini-2.5-flash', name:'2.5 Flash', rpd:20 },
                     ];
                     const liteChain = [
+                        { id:'gemini-3.5-flash-lite', name:'3.5 Lite', rpd:500 },
                         { id:'gemini-3.1-flash-lite', name:'3.1 Lite', rpd:500 },
                         { id:'gemini-2.5-flash-lite', name:'2.5 Lite', rpd:20 },
                     ];
@@ -29656,12 +29701,12 @@ ${originalContent}`;
                             <div style="padding:10px 12px;background:var(--bg-light);border:1px solid var(--border-subtle);border-radius:8px;">
                                 <p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 2px;">Thinking 가능</p>
                                 <p style="font-size:1.3rem;font-weight:700;color:var(--primary);margin:0;">${tRemain}<span style="font-size:0.75rem;font-weight:400;color:var(--text-muted);">회</span></p>
-                                <p style="font-size:0.7rem;color:var(--text-muted);margin:2px 0 0;">/ 60회 총한도</p>
+                                <p style="font-size:0.7rem;color:var(--text-muted);margin:2px 0 0;">/ 120회 총한도</p>
                             </div>
                             <div style="padding:10px 12px;background:var(--bg-light);border:1px solid var(--border-subtle);border-radius:8px;">
                                 <p style="font-size:0.72rem;color:var(--text-muted);margin:0 0 2px;">Lite 가능</p>
                                 <p style="font-size:1.3rem;font-weight:700;color:var(--accent);margin:0;">${lRemain}<span style="font-size:0.75rem;font-weight:400;color:var(--text-muted);">회</span></p>
-                                <p style="font-size:0.7rem;color:var(--text-muted);margin:2px 0 0;">/ 520회 총한도</p>
+                                <p style="font-size:0.7rem;color:var(--text-muted);margin:2px 0 0;">/ 1,020회 총한도</p>
                             </div>
                         </div>
                         <div style="background:var(--bg-light);border:1px solid var(--border-subtle);border-radius:8px;padding:10px 12px;">
@@ -29699,12 +29744,16 @@ ${originalContent}`;
                 let rpdSection = '';
                 if (provider === 'gemini') {
                     const rpdModels = [
+                        { id:'gemini-3.8-flash',      name:'3.8 Flash',  rpd:20,   group:'thinking' },
+                        { id:'gemini-3.7-flash',      name:'3.7 Flash',  rpd:20,   group:'thinking' },
+                        { id:'gemini-3.6-flash',      name:'3.6 Flash',  rpd:20,   group:'thinking' },
                         { id:'gemini-3.5-flash',      name:'3.5 Flash',  rpd:20,   group:'thinking' },
                         { id:'gemini-3-flash-preview', name:'3 Flash',   rpd:20,   group:'thinking' },
                         { id:'gemini-2.5-flash',       name:'2.5 Flash', rpd:20,   group:'thinking' },
+                        { id:'gemini-3.5-flash-lite',  name:'3.5 Lite',  rpd:500,  group:'lite' },
                         { id:'gemini-3.1-flash-lite',  name:'3.1 Lite',  rpd:500,  group:'lite' },
                         { id:'gemini-2.5-flash-lite',  name:'2.5 Lite',  rpd:20,   group:'lite' },
-                    ].filter(m => (mc[m.id]||0) > 0 || ['gemini-3.5-flash','gemini-3.1-flash-lite'].includes(m.id));
+                    ].filter(m => (mc[m.id]||0) > 0 || ['gemini-3.8-flash','gemini-3.5-flash-lite'].includes(m.id));
 
                     rpdSection = `
                     <div>
@@ -30571,7 +30620,7 @@ ${originalContent}`;
                     chatgptApiKey: apiKeys.chatgpt || '',
                     claudeApiKey: apiKeys.claude || '',
                     selectedModel: appSettings.selectedModel || {
-                        gemini: 'gemini-3.1-flash-lite',
+                        gemini: 'gemini-3.5-flash-lite',
                         chatgpt: 'gpt-4o-mini',
                         claude: 'claude-3-5-haiku-20241022'
                     },
@@ -30654,7 +30703,7 @@ ${originalContent}`;
                     chatgptApiKey: '',
                     claudeApiKey: '',
                     selectedModel: {
-                        gemini: 'gemini-3.1-flash-lite',
+                        gemini: 'gemini-3.5-flash-lite',
                         chatgpt: 'gpt-4o-mini',
                         claude: 'claude-3-5-haiku-20241022'
                     },
@@ -33205,8 +33254,8 @@ ${originalContent}`;
 
             // 없으면 생성 후 저장
             try {
-                // PDF 요약은 항상 3.1 Lite 사용 (3.5 Flash 할당량 보존)
-                const summaryModel = provider === 'gemini' ? 'gemini-3.1-flash-lite' : model;
+                // PDF 요약은 항상 3.5 Lite 사용 (Flash 할당량 보존)
+                const summaryModel = provider === 'gemini' ? 'gemini-3.5-flash-lite' : model;
                 const summary = await summarizePdfWithAI(doc.content, apiKey, provider, summaryModel);
                 
                 // 요약 저장
@@ -33328,7 +33377,7 @@ ${originalContent}`;
                 if (pdfContent.length > 50000) {
                     const SEGMENT = 30000;
                     const isVeryLarge = pdfContent.length > 500000;
-                    const summaryModel = provider === 'gemini' ? 'gemini-3.1-flash-lite' : model;
+                    const summaryModel = provider === 'gemini' ? 'gemini-3.5-flash-lite' : model;
                     const segments = [];
 
                     if (isVeryLarge) {
@@ -33774,7 +33823,7 @@ ${pdfContent.length > 100000 ? pdfContent.substring(0, 100000) + '\n\n[중략: �
 
                 // getSmartDocContext 사용 (질문 기반 동적 추출)
                 const provider = this.allData.provider || 'gemini';
-                const model = this.allData.selectedModel?.[provider] || 'gemini-3.1-flash-lite';
+                const model = this.allData.selectedModel?.[provider] || 'gemini-3.5-flash-lite';
                 let apiKey;
                 if (provider === 'gemini') {
                     apiKey = this.allData.geminiApiKey;
@@ -33821,7 +33870,7 @@ ${pdfContent.length > 100000 ? pdfContent.substring(0, 100000) + '\n\n[중략: �
                 
                 // API 키 정보 가져오기
                 const attachmentProvider = this.allData.provider || 'gemini';
-                const attachmentModel = this.allData.selectedModel?.[attachmentProvider] || 'gemini-3.1-flash-lite';
+                const attachmentModel = this.allData.selectedModel?.[attachmentProvider] || 'gemini-3.5-flash-lite';
                 let attachmentApiKey = '';
                 if (attachmentProvider === 'gemini') {
                     attachmentApiKey = this.allData.geminiApiKey;
